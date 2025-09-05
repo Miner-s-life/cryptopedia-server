@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: cryptopedia_db
+    environment:
+      POSTGRES_DB: cryptopedia
+      POSTGRES_USER: cryptopedia_user
+      POSTGRES_PASSWORD: cryptopedia_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql
+    networks:
+      - cryptopedia_network
+
+  # 향후 Rust 앱도 Docker로 실행할 때 사용
+  # app:
+  #   build: .
+  #   container_name: cryptopedia_app
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - postgres
+  #   environment:
+  #     DATABASE_URL: postgresql://cryptopedia_user:cryptopedia_password@postgres:5432/cryptopedia
+  #     RUST_LOG: info
+  #   networks:
+  #     - cryptopedia_network
+
+volumes:
+  postgres_data:
+
+networks:
+  cryptopedia_network:
+    driver: bridge

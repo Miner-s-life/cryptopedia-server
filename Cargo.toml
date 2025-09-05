@@ -1,0 +1,46 @@
+[package]
+name = "cryptopedia"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# 웹 프레임워크
+actix-web = "4.4"
+actix-rt = "2.9"
+actix-cors = "0.6"
+
+# 데이터베이스
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "bigdecimal"] }
+
+# HTTP 클라이언트
+reqwest = { version = "0.11", features = ["json"] }
+
+# 직렬화/역직렬화
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# 시간 처리
+chrono = { version = "0.4", features = ["serde"] }
+
+# 스케줄링
+tokio-cron-scheduler = "0.9"
+
+# 로깅
+env_logger = "0.10"
+log = "0.4"
+
+# 환경 변수
+dotenvy = "0.15"
+
+# 에러 처리
+anyhow = "1.0"
+thiserror = "1.0"
+
+# 숫자 처리
+bigdecimal = { version = "0.3", features = ["serde"] }
+
+# UUID
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# 비동기 런타임
+tokio = { version = "1.0", features = ["full"] }
