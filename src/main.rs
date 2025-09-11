@@ -14,11 +14,18 @@ mod utils;
 use config::Config;
 use database::create_connection_pool;
 use handlers::*;
-use services::{ArbitrageService, ExchangeService, SchedulerService};
+use services::{ArbitrageService, ExchangeService, ExchangeRateService, SchedulerService};
 
 #[actix_web::main]
 async fn main() -> Result<()> {
-    dotenvy::dotenv().ok();
+    let env = std::env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+    let env_file = format!(".env.{}", env);
+    
+    if std::path::Path::new(&env_file).exists() {
+        dotenvy::from_filename(&env_file).ok();
+    } else {
+        dotenvy::dotenv().ok();
+    }
     
     let config = Config::from_env().expect("Failed to load configuration");
     
@@ -34,10 +41,14 @@ async fn main() -> Result<()> {
     
     info!("Database connection established");
     
-    let exchange_service = Arc::new(ExchangeService::new(pool.clone()));
-    let arbitrage_service = Arc::new(ArbitrageService::new(pool.clone()));
+    let exchange_rate_api_key = std::env::var("EXCHANGE_RATE_API_KEY")
+        .unwrap_or_else(|_| "YOUR_API_KEY_HERE".to_string());
     
-    let mut scheduler = SchedulerService::new(Arc::clone(&exchange_service)).await
+    let exchange_service = Arc::new(ExchangeService::new(pool.clone()));
+    let exchange_rate_service = Arc::new(ExchangeRateService::new(pool.clone(), exchange_rate_api_key.clone()));
+    let arbitrage_service = Arc::new(ArbitrageService::new(pool.clone(), exchange_rate_api_key));
+    
+    let mut scheduler = SchedulerService::new(Arc::clone(&exchange_service), Arc::clone(&exchange_rate_service)).await
         .expect("Failed to create scheduler");
     
     scheduler.start().await.expect("Failed to start scheduler");
@@ -47,6 +58,7 @@ async fn main() -> Result<()> {
     info!("Starting HTTP server on {}", server_address);
     
     let exchange_service_data = web::Data::new((*exchange_service).clone());
+    let exchange_rate_service_data = web::Data::new((*exchange_rate_service).clone());
     let arbitrage_service_data = web::Data::new((*arbitrage_service).clone());
     
     HttpServer::new(move || {
@@ -58,6 +70,7 @@ async fn main() -> Result<()> {
             
         App::new()
             .app_data(exchange_service_data.clone())
+            .app_data(exchange_rate_service_data.clone())
             .app_data(arbitrage_service_data.clone())
             .wrap(cors)
             .wrap(Logger::default())
@@ -67,6 +80,7 @@ async fn main() -> Result<()> {
                     .route("/kimchi-premium/{symbol}", web::get().to(get_kimchi_premium))
                     .route("/prices/{symbol}", web::get().to(get_exchange_prices))
                     .route("/fees/{symbol}/{amount}", web::get().to(calculate_fees))
+                    .route("/exchange-rate", web::get().to(get_current_exchange_rate))
             )
     })
     .bind(&server_address)?

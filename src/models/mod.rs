@@ -1,7 +1,9 @@
+pub mod arbitrage;
 pub mod coin;
 pub mod exchange;
-pub mod arbitrage;
+pub mod exchange_rate;
 
-// pub use coin::*;  // Currently unused
 pub use exchange::*;
 pub use arbitrage::*;
+#[allow(unused_imports)]
+pub use exchange_rate::*;

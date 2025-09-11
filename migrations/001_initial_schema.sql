@@ -33,8 +33,10 @@ CREATE TABLE price_data (
 -- Create exchange_rates table
 CREATE TABLE exchange_rates (
     id SERIAL PRIMARY KEY,
-    currency_code VARCHAR(10) NOT NULL,
-    rate DECIMAL(20, 8) NOT NULL,
+    currency_code VARCHAR(3) NOT NULL,
+    rate DECIMAL(15, 4) NOT NULL,
+    ttb_rate DECIMAL(15, 4),
+    tts_rate DECIMAL(15, 4),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

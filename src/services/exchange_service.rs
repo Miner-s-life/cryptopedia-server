@@ -7,8 +7,7 @@ use sqlx::PgPool;
 use std::str::FromStr;
 
 use crate::models::{
-    BinanceTickerResponse, BithumbTickerResponse, UpbitTickerResponse, 
-    NewPriceData, NewExchangeRate
+    BinanceTickerResponse, UpbitTickerResponse, BithumbTickerResponse, NewPriceData
 };
 
 #[derive(Clone)]
@@ -28,15 +27,12 @@ impl ExchangeService {
     pub async fn fetch_all_prices(&self) -> Result<()> {
         info!("Starting to fetch all exchange prices");
         
-        // 병렬로 모든 거래소 데이터 수집
-        let (binance_result, upbit_result, bithumb_result, exchange_rate_result) = tokio::join!(
+        let (binance_result, upbit_result, bithumb_result) = tokio::join!(
             self.fetch_binance_prices(),
             self.fetch_upbit_prices(),
-            self.fetch_bithumb_prices(),
-            self.fetch_exchange_rate()
+            self.fetch_bithumb_prices()
         );
 
-        // 바이낸스 결과 처리
         match binance_result {
             Ok(prices) => {
                 if let Err(e) = self.save_prices(prices, 1).await {
@@ -46,7 +42,6 @@ impl ExchangeService {
             Err(e) => error!("Failed to fetch Binance prices: {}", e),
         }
 
-        // 업비트 결과 처리
         match upbit_result {
             Ok(prices) => {
                 if let Err(e) = self.save_prices(prices, 2).await {
@@ -56,7 +51,6 @@ impl ExchangeService {
             Err(e) => error!("Failed to fetch Upbit prices: {}", e),
         }
 
-        // 빗썸 결과 처리
         match bithumb_result {
             Ok(prices) => {
                 if let Err(e) = self.save_prices(prices, 3).await {
@@ -66,12 +60,6 @@ impl ExchangeService {
             Err(e) => error!("Failed to fetch Bithumb prices: {}", e),
         }
 
-        // 환율 정보 저장
-        if let Ok(rate) = exchange_rate_result {
-            if let Err(e) = self.save_exchange_rate(rate).await {
-                error!("Failed to save exchange rate: {}", e);
-            }
-        }
 
         info!("Completed fetching all exchange prices");
         Ok(())
@@ -99,7 +87,7 @@ impl ExchangeService {
                     let price_change = BigDecimal::from_str(&ticker.price_change_percent).ok();
 
                     prices.push(NewPriceData {
-                        exchange_id: 1, // Binance
+                        exchange_id: 1, // TODO: Binance
                         coin_id,
                         price,
                         volume_24h: volume,
@@ -135,7 +123,7 @@ impl ExchangeService {
                 let price_change = BigDecimal::from_f64(ticker.signed_change_rate * 100.0).unwrap_or_default();
 
                 prices.push(NewPriceData {
-                    exchange_id: 2, // Upbit
+                    exchange_id: 2, // TODO: Upbit
                     coin_id,
                     price,
                     volume_24h: Some(volume),
@@ -168,7 +156,7 @@ impl ExchangeService {
                                     let price_change = BigDecimal::from_str(&ticker.data.fluctate_rate_24h).ok();
 
                                     prices.push(NewPriceData {
-                                        exchange_id: 3, // Bithumb
+                                        exchange_id: 3, // TODO: Bithumb
                                         coin_id,
                                         price,
                                         volume_24h: volume,
@@ -189,18 +177,6 @@ impl ExchangeService {
         Ok(prices)
     }
 
-    async fn fetch_exchange_rate(&self) -> Result<NewExchangeRate> {
-        // 한국은행 API 또는 다른 환율 API 사용
-        // 여기서는 임시로 고정값 사용
-        let rate = BigDecimal::from_str("1340.0")?; // USD/KRW
-        
-        Ok(NewExchangeRate {
-            from_currency: "USD".to_string(),
-            to_currency: "KRW".to_string(),
-            rate,
-            timestamp: Utc::now(),
-        })
-    }
 
     async fn get_coin_id(&self, symbol: &str) -> Result<Option<i32>> {
         let result = sqlx::query_scalar!(
@@ -240,25 +216,6 @@ impl ExchangeService {
         Ok(())
     }
 
-    async fn save_exchange_rate(&self, rate: NewExchangeRate) -> Result<()> {
-        sqlx::query!(
-            r#"
-            INSERT INTO exchange_rates (from_currency, to_currency, rate, timestamp)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (from_currency, to_currency, timestamp) DO UPDATE SET
-                rate = EXCLUDED.rate
-            "#,
-            rate.from_currency,
-            rate.to_currency,
-            rate.rate,
-            rate.timestamp
-        )
-        .execute(&self.db)
-        .await?;
-
-        info!("Saved exchange rate: {} {} = {}", rate.rate, rate.from_currency, rate.to_currency);
-        Ok(())
-    }
 
     pub async fn get_latest_prices(&self, symbol: &str) -> Result<Vec<(String, BigDecimal)>> {
         let coin_id = self.get_coin_id(symbol).await?;

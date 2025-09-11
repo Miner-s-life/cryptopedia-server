@@ -3,19 +3,21 @@ use log::{error, info};
 use std::sync::Arc;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
-use crate::services::ExchangeService;
+use crate::services::{ExchangeService, ExchangeRateService};
 
 pub struct SchedulerService {
     exchange_service: Arc<ExchangeService>,
+    exchange_rate_service: Arc<ExchangeRateService>,
     scheduler: JobScheduler,
 }
 
 impl SchedulerService {
-    pub async fn new(exchange_service: Arc<ExchangeService>) -> Result<Self> {
+    pub async fn new(exchange_service: Arc<ExchangeService>, exchange_rate_service: Arc<ExchangeRateService>) -> Result<Self> {
         let scheduler = JobScheduler::new().await?;
         
         Ok(Self {
             exchange_service,
+            exchange_rate_service,
             scheduler,
         })
     }
@@ -36,7 +38,21 @@ impl SchedulerService {
             })
         })?;
 
+        let exchange_rate_service = Arc::clone(&self.exchange_rate_service);
+        let exchange_rate_job = Job::new_async("0 */2 * * * *", move |_uuid, _l| {
+            let service = Arc::clone(&exchange_rate_service);
+            Box::pin(async move {
+                info!("Starting scheduled exchange rate update");
+                
+                match service.fetch_and_save_usd_krw_rate().await {
+                    Ok(rate) => info!("Successfully updated exchange rate: {}", rate),
+                    Err(e) => error!("Failed to update exchange rate: {}", e),
+                }
+            })
+        })?;
+
         self.scheduler.add(price_collection_job).await?;
+        self.scheduler.add(exchange_rate_job).await?;
 
         self.scheduler.start().await?;
         
@@ -44,8 +60,8 @@ impl SchedulerService {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn stop(&mut self) -> Result<()> {
-        info!("Stopping scheduler service");
         self.scheduler.shutdown().await?;
         info!("Scheduler service stopped");
         Ok(())

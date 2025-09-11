@@ -16,11 +16,16 @@ pub enum AppError {
     DecimalParsing(#[from] bigdecimal::ParseBigDecimalError),
     
     #[error("Internal server error: {0}")]
+    #[allow(dead_code)]
     Internal(String),
-    
+    #[error("Database error: {0}")]
+    DatabaseError(String),
+    #[allow(dead_code)]
     #[error("Not found: {0}")]
     NotFound(String),
-    
+    #[error("External API error: {0}")]
+    ExternalApiError(String),
+    #[allow(dead_code)]
     #[error("Bad request: {0}")]
     BadRequest(String),
 }
@@ -48,6 +53,12 @@ impl ResponseError for AppError {
             }
             AppError::BadRequest(msg) => {
                 HttpResponse::BadRequest().json(msg)
+            }
+            AppError::ExternalApiError(msg) => {
+                HttpResponse::BadGateway().json(msg)
+            }
+            AppError::DatabaseError(msg) => {
+                HttpResponse::InternalServerError().json(msg)
             }
         }
     }

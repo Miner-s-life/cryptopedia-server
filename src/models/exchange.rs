@@ -50,23 +50,6 @@ pub struct NewPriceData {
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
-pub struct ExchangeRate {
-    pub id: i32,
-    pub from_currency: String,
-    pub to_currency: String,
-    pub rate: BigDecimal,
-    pub timestamp: DateTime<Utc>,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct NewExchangeRate {
-    pub from_currency: String,
-    pub to_currency: String,
-    pub rate: BigDecimal,
-    pub timestamp: DateTime<Utc>,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct ExchangeFee {
@@ -78,7 +61,6 @@ pub struct ExchangeFee {
     pub updated_at: DateTime<Utc>,
 }
 
-// API 응답 구조체들
 #[derive(Debug, Deserialize)]
 pub struct BinanceTickerResponse {
     pub symbol: String,

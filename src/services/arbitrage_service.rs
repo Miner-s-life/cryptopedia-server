@@ -7,15 +7,21 @@ use std::str::FromStr;
 use crate::models::{
     ArbitrageOpportunity, ExchangeType, KimchiPremium, FeeCalculation
 };
+use crate::services::ExchangeRateService;
 
 #[derive(Clone)]
 pub struct ArbitrageService {
     db: PgPool,
+    exchange_rate_service: ExchangeRateService,
 }
 
 impl ArbitrageService {
-    pub fn new(db: PgPool) -> Self {
-        Self { db }
+    pub fn new(db: PgPool, auth_key: String) -> Self {
+        let exchange_rate_service = ExchangeRateService::new(db.clone(), auth_key);
+        Self { 
+            db,
+            exchange_rate_service,
+        }
     }
 
     pub async fn find_arbitrage_opportunities(&self) -> Result<Vec<ArbitrageOpportunity>> {
@@ -25,7 +31,7 @@ impl ArbitrageService {
         for symbol in symbols {
             match self.calculate_arbitrage_for_symbol(&symbol).await {
                 Ok(Some(opportunity)) => opportunities.push(opportunity),
-                Ok(None) => {}, // 수익성 없음
+                Ok(None) => {},
                 Err(e) => error!("Failed to calculate arbitrage for {}: {}", symbol, e),
             }
         }
@@ -35,24 +41,21 @@ impl ArbitrageService {
     }
 
     async fn calculate_arbitrage_for_symbol(&self, symbol: &str) -> Result<Option<ArbitrageOpportunity>> {
-        // 최신 가격 데이터 조회
         let prices = self.get_latest_prices_for_symbol(symbol).await?;
         
         if prices.len() < 2 {
             return Ok(None);
         }
 
-        // 환율 정보 조회
-        let exchange_rate = self.get_latest_exchange_rate().await?;
+        let exchange_rate = self.exchange_rate_service.get_latest_usd_krw_rate().await
+            .unwrap_or_else(|_| ExchangeRateService::get_fallback_usd_krw_rate());
 
-        // 국내외 가격 분리
         let mut domestic_prices = Vec::new();
         let mut foreign_prices = Vec::new();
 
         for (exchange_name, price) in &prices {
             match exchange_name.as_str() {
                 "Binance" => {
-                    // USD 가격을 KRW로 변환
                     let krw_price = price * &exchange_rate;
                     foreign_prices.push(("Binance".to_string(), price.clone(), krw_price));
                 }
@@ -67,25 +70,21 @@ impl ArbitrageService {
             return Ok(None);
         }
 
-        // 최적의 차익거래 기회 찾기
         let mut best_opportunity: Option<ArbitrageOpportunity> = None;
         let mut max_profit = BigDecimal::from(-100);
 
         for (domestic_exchange, domestic_price) in &domestic_prices {
             for (foreign_exchange, foreign_price_usd, foreign_price_krw) in &foreign_prices {
-                // 김치 프리미엄 계산
                 let kimchi_premium = self.calculate_kimchi_premium_value(
                     domestic_price, 
                     foreign_price_krw
                 );
 
-                // 수수료 계산
                 let total_fees = self.calculate_total_fees(symbol, domestic_exchange, foreign_exchange).await?;
 
-                // 차익거래 기회 생성
                 let (buy_exchange, sell_exchange, buy_price, sell_price) = 
                     if kimchi_premium > BigDecimal::from(0) {
-                        // 해외 매수, 국내 매도
+                        // 해외 매수,국내 매도
                         (
                             ExchangeType::Binance,
                             self.exchange_name_to_type(domestic_exchange),
@@ -124,7 +123,8 @@ impl ArbitrageService {
 
     pub async fn calculate_kimchi_premium(&self, symbol: &str) -> Result<KimchiPremium> {
         let prices = self.get_latest_prices_for_symbol(symbol).await?;
-        let exchange_rate = self.get_latest_exchange_rate().await?;
+        let exchange_rate = self.exchange_rate_service.get_latest_usd_krw_rate().await
+            .unwrap_or_else(|_| ExchangeRateService::get_fallback_usd_krw_rate());
 
         let mut domestic_price = BigDecimal::from(0);
         let mut foreign_price = BigDecimal::from(0);
@@ -141,10 +141,8 @@ impl ArbitrageService {
             return Err(anyhow::anyhow!("Insufficient price data for {}", symbol));
         }
 
-        // 외국 가격을 원화로 변환
         let foreign_price_krw = &foreign_price * &exchange_rate;
         
-        // 김치 프리미엄 계산
         let premium_percentage = self.calculate_kimchi_premium_value(&domestic_price, &foreign_price_krw);
 
         Ok(KimchiPremium {
@@ -165,7 +163,7 @@ impl ArbitrageService {
     }
 
     async fn calculate_total_fees(&self, symbol: &str, _buy_exchange: &str, _sell_exchange: &str) -> Result<BigDecimal> {
-        // 기본 수수료 (실제로는 DB에서 조회해야 함)
+        // TODO: 기본 수수료 (실제로는 DB에서 조회해야 함)
         let trading_fee = BigDecimal::from_str("0.1")?; // 0.1%
         let _withdrawal_fee = match symbol {
             "BTC" => BigDecimal::from_str("0.0005")?,
@@ -205,21 +203,6 @@ impl ArbitrageService {
         Ok(prices)
     }
 
-    async fn get_latest_exchange_rate(&self) -> Result<BigDecimal> {
-        let result = sqlx::query_scalar!(
-            r#"
-            SELECT rate
-            FROM exchange_rates
-            WHERE from_currency = 'USD' AND to_currency = 'KRW'
-            ORDER BY timestamp DESC
-            LIMIT 1
-            "#
-        )
-        .fetch_optional(&self.db)
-        .await?;
-
-        Ok(result.unwrap_or(BigDecimal::from_str("1340.0")?))
-    }
 
     fn exchange_name_to_type(&self, name: &str) -> ExchangeType {
         match name {

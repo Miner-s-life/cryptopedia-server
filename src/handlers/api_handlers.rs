@@ -3,9 +3,8 @@ use bigdecimal::BigDecimal;
 use log::{error, info};
 use std::str::FromStr;
 
-use crate::services::{ArbitrageService, ExchangeService};
+use crate::services::{ExchangeService, ArbitrageService, ExchangeRateService};
 
-// 차익거래 기회 조회
 pub async fn get_arbitrage_opportunities(
     arbitrage_service: web::Data<ArbitrageService>,
 ) -> Result<HttpResponse> {
@@ -23,7 +22,6 @@ pub async fn get_arbitrage_opportunities(
     }
 }
 
-// 특정 코인의 김치 프리미엄 조회
 pub async fn get_kimchi_premium(
     path: web::Path<String>,
     arbitrage_service: web::Data<ArbitrageService>,
@@ -43,7 +41,6 @@ pub async fn get_kimchi_premium(
     }
 }
 
-// 특정 코인의 최신 가격 조회
 pub async fn get_exchange_prices(
     path: web::Path<String>,
     exchange_service: web::Data<ExchangeService>,
@@ -63,7 +60,6 @@ pub async fn get_exchange_prices(
     }
 }
 
-// 수수료 계산
 pub async fn calculate_fees(
     path: web::Path<(String, String)>,
     arbitrage_service: web::Data<ArbitrageService>,
@@ -93,3 +89,29 @@ pub async fn calculate_fees(
     }
 }
 
+pub async fn get_current_exchange_rate(
+    exchange_rate_service: web::Data<ExchangeRateService>,
+) -> Result<HttpResponse> {
+    info!("Fetching current USD/KRW exchange rate");
+    
+    match exchange_rate_service.get_latest_usd_krw_rate().await {
+        Ok(rate) => {
+            info!("Current USD/KRW rate: {}", rate);
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "currency_pair": "USD/KRW",
+                "rate": rate,
+                "timestamp": chrono::Utc::now()
+            })))
+        }
+        Err(e) => {
+            error!("Failed to get exchange rate: {}", e);
+            let fallback_rate = ExchangeRateService::get_fallback_usd_krw_rate();
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "currency_pair": "USD/KRW",
+                "rate": fallback_rate,
+                "timestamp": chrono::Utc::now(),
+                "note": "Using fallback rate due to API error"
+            })))
+        }
+    }
+}

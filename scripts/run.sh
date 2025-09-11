@@ -1,9 +1,22 @@
 #!/bin/bash
 
-if [ ! -f ".env" ]; then
-    echo ".env file not found. Create one: cp .env.example .env"
+# Default environment
+ENVIRONMENT=${1:-dev}
+
+# Check if environment file exists
+ENV_FILE=".env.${ENVIRONMENT}"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "Environment file $ENV_FILE not found."
+    echo "Available environments:"
+    ls .env.* 2>/dev/null | sed 's/.env./  - /' || echo "  No environment files found"
+    echo ""
+    echo "Usage: $0 [environment]"
+    echo "Example: $0 dev"
+    echo "         $0 prod"
     exit 1
 fi
+
+echo "Starting with environment: $ENVIRONMENT"
 
 if ! docker ps | grep -q cryptopedia_db; then
     docker-compose up -d postgres
@@ -17,4 +30,4 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-cargo run
+ENVIRONMENT=$ENVIRONMENT cargo run
