@@ -21,10 +21,6 @@ impl ArbitrageService {
         }
     }
 
-
-
-
-
     async fn calculate_total_fees(&self, symbol: &str, _buy_exchange: &str, _sell_exchange: &str) -> Result<BigDecimal> {
         // TODO: 기본 수수료 (실제로는 DB에서 조회해야 함)
         let trading_fee = BigDecimal::from_str("0.1")?; // 0.1%
@@ -64,9 +60,6 @@ impl ArbitrageService {
 
         Ok(prices)
     }
-
-
-
 
     pub async fn get_directional_arbitrage(&self, symbol: &str, from_exchange: &str, to_exchange: &str) -> Result<DirectionalArbitrage> {
         let prices = self.get_latest_prices_for_symbol(symbol).await?;
@@ -111,10 +104,7 @@ impl ArbitrageService {
     async fn adjust_prices_for_currency(&self, from_price: &BigDecimal, to_price: &BigDecimal, from_exchange: &str, to_exchange: &str) -> Result<(BigDecimal, BigDecimal)> {
         let usdt_krw_price = match self.get_usdt_krw_price().await {
             Ok(price) => price,
-            Err(_) => match self.exchange_rate_service.get_latest_usd_krw_rate().await {
-                Ok(rate) => rate,
-                Err(_) => ExchangeRateService::get_fallback_usd_krw_rate(),
-            }
+            Err(_) => self.exchange_rate_service.get_latest_usd_krw_rate().await.unwrap_or_else(|_| ExchangeRateService::get_fallback_usd_krw_rate())
         };
         
         let adjusted_from = if from_exchange == "Binance" {

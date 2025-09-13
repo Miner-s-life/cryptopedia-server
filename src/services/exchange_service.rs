@@ -103,7 +103,11 @@ impl ExchangeService {
     }
 
     async fn fetch_upbit_prices(&self) -> Result<Vec<NewPriceData>> {
-        let url = "https://api.upbit.com/v1/ticker?markets=KRW-BTC,KRW-ETH,KRW-XRP,KRW-SOL,KRW-USDT";
+        let symbols = self.get_all_coin_symbols().await?;
+        let markets: Vec<String> = symbols.iter().map(|s| format!("KRW-{}", s)).collect();
+        let markets_param = markets.join(",");
+        let url = format!("https://api.upbit.com/v1/ticker?markets={}", markets_param);
+        
         let response: Vec<UpbitTickerResponse> = self.client
             .get(url)
             .send()
@@ -138,7 +142,7 @@ impl ExchangeService {
     }
 
     async fn fetch_bithumb_prices(&self) -> Result<Vec<NewPriceData>> {
-        let symbols = ["BTC", "ETH", "XRP", "SOL", "USDT"];
+        let symbols = self.get_all_coin_symbols().await?;
         let mut prices = Vec::new();
         let timestamp = Utc::now();
         
@@ -179,14 +183,24 @@ impl ExchangeService {
 
 
     async fn get_coin_id(&self, symbol: &str) -> Result<Option<i32>> {
-        let result = sqlx::query_scalar!(
+        let result = sqlx::query!(
             "SELECT id FROM coins WHERE symbol = $1 AND is_active = true",
             symbol
         )
         .fetch_optional(&self.db)
         .await?;
 
-        Ok(result)
+        Ok(result.map(|row| row.id))
+    }
+
+    async fn get_all_coin_symbols(&self) -> Result<Vec<String>> {
+        let results = sqlx::query!(
+            "SELECT symbol FROM coins WHERE is_active = true ORDER BY symbol"
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        Ok(results.into_iter().map(|row| row.symbol).collect())
     }
 
     async fn save_prices(&self, prices: Vec<NewPriceData>, exchange_id: i32) -> Result<()> {
