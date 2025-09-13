@@ -76,11 +76,7 @@ async fn main() -> Result<()> {
             .wrap(Logger::default())
             .service(
                 web::scope("/api/v1")
-                    .route("/arbitrage", web::get().to(get_arbitrage_opportunities))
-                    .route("/kimchi-premium/{symbol}", web::get().to(get_kimchi_premium))
-                    .route("/prices/{symbol}", web::get().to(get_exchange_prices))
-                    .route("/fees/{symbol}/{amount}", web::get().to(calculate_fees))
-                    .route("/exchange-rate", web::get().to(get_current_exchange_rate))
+                    .route("/arbitrage/{symbol}", web::get().to(get_directional_arbitrage))
             )
     })
     .bind(&server_address)?

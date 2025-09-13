@@ -103,7 +103,7 @@ impl ExchangeService {
     }
 
     async fn fetch_upbit_prices(&self) -> Result<Vec<NewPriceData>> {
-        let url = "https://api.upbit.com/v1/ticker?markets=KRW-BTC,KRW-ETH,KRW-XRP,KRW-ADA,KRW-DOT";
+        let url = "https://api.upbit.com/v1/ticker?markets=KRW-BTC,KRW-ETH,KRW-XRP,KRW-SOL,KRW-USDT";
         let response: Vec<UpbitTickerResponse> = self.client
             .get(url)
             .send()
@@ -138,7 +138,7 @@ impl ExchangeService {
     }
 
     async fn fetch_bithumb_prices(&self) -> Result<Vec<NewPriceData>> {
-        let symbols = ["BTC", "ETH", "XRP", "ADA", "DOT"];
+        let symbols = ["BTC", "ETH", "XRP", "SOL", "USDT"];
         let mut prices = Vec::new();
         let timestamp = Utc::now();
         
@@ -217,33 +217,4 @@ impl ExchangeService {
     }
 
 
-    pub async fn get_latest_prices(&self, symbol: &str) -> Result<Vec<(String, BigDecimal)>> {
-        let coin_id = self.get_coin_id(symbol).await?;
-        
-        if let Some(coin_id) = coin_id {
-            let results = sqlx::query!(
-                r#"
-                SELECT e.name, pd.price
-                FROM price_data pd
-                JOIN exchanges e ON pd.exchange_id = e.id
-                WHERE pd.coin_id = $1
-                AND pd.timestamp >= NOW() - INTERVAL '1 hour'
-                ORDER BY pd.timestamp DESC
-                LIMIT 3
-                "#,
-                coin_id
-            )
-            .fetch_all(&self.db)
-            .await?;
-
-            let prices: Vec<(String, BigDecimal)> = results
-                .into_iter()
-                .map(|row| (row.name, row.price))
-                .collect();
-
-            Ok(prices)
-        } else {
-            Ok(Vec::new())
-        }
-    }
 }

@@ -68,4 +68,5 @@ INSERT INTO coins (symbol, name) VALUES
 ('BTC', 'Bitcoin'),
 ('ETH', 'Ethereum'),
 ('XRP', 'Ripple'),
-('SOL', 'Solana')
+('SOL', 'Solana'),
+('USDT', 'Tether');

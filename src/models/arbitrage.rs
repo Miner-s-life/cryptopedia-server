@@ -16,6 +16,20 @@ pub struct ArbitrageOpportunity {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct DirectionalArbitrage {
+    pub symbol: String,
+    pub from_exchange: String,
+    pub to_exchange: String,
+    pub from_price: BigDecimal,
+    pub to_price: BigDecimal,
+    pub price_difference: BigDecimal,
+    pub profit_percentage: BigDecimal,
+    pub estimated_profit_after_fees: BigDecimal,
+    pub total_fees: BigDecimal,
+    pub is_profitable: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ArbitrageRecommendation {
     Buy { profit_percentage: BigDecimal },
     Sell { profit_percentage: BigDecimal },
@@ -39,42 +53,3 @@ pub struct FeeCalculation {
     pub total_fee: BigDecimal,
 }
 
-impl ArbitrageOpportunity {
-    pub fn new(
-        symbol: String,
-        kimchi_premium: BigDecimal,
-        buy_exchange: ExchangeType,
-        sell_exchange: ExchangeType,
-        buy_price: BigDecimal,
-        sell_price: BigDecimal,
-        total_fees: BigDecimal,
-    ) -> Self {
-        let estimated_profit = ((&sell_price - &buy_price) / &buy_price * BigDecimal::from(100)) - &total_fees;
-        
-        let recommendation = if estimated_profit > BigDecimal::from(1) {
-            ArbitrageRecommendation::Buy {
-                profit_percentage: estimated_profit.clone(),
-            }
-        } else if estimated_profit < BigDecimal::from(-1) {
-            ArbitrageRecommendation::Sell {
-                profit_percentage: estimated_profit.abs(),
-            }
-        } else {
-            ArbitrageRecommendation::Hold {
-                reason: "수수료 대비 수익성 부족".to_string(),
-            }
-        };
-
-        Self {
-            symbol,
-            kimchi_premium,
-            buy_exchange,
-            sell_exchange,
-            buy_price,
-            sell_price,
-            estimated_profit,
-            total_fees,
-            recommendation,
-        }
-    }
-}
