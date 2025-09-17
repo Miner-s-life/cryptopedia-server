@@ -12,6 +12,12 @@ pub struct ArbitrageService {
     exchange_rate_service: ExchangeRateService,
 }
 
+#[derive(Clone, Copy)]
+pub enum FxSource {
+    UsdtKrw,
+    UsdKrw,
+}
+
 impl ArbitrageService {
     pub fn new(db: PgPool, auth_key: String) -> Self {
         let exchange_rate_service = ExchangeRateService::new(db.clone(), auth_key);
@@ -62,6 +68,17 @@ impl ArbitrageService {
     }
 
     pub async fn get_directional_arbitrage(&self, symbol: &str, from_exchange: &str, to_exchange: &str) -> Result<DirectionalArbitrage> {
+        self.get_directional_arbitrage_with_options(symbol, from_exchange, to_exchange, FxSource::UsdtKrw, true).await
+    }
+
+    pub async fn get_directional_arbitrage_with_options(
+        &self,
+        symbol: &str,
+        from_exchange: &str,
+        to_exchange: &str,
+        fx_source: FxSource,
+        include_fees: bool,
+    ) -> Result<DirectionalArbitrage> {
         let prices = self.get_latest_prices_for_symbol(symbol).await?;
         
         let mut from_price: Option<BigDecimal> = None;
@@ -78,12 +95,16 @@ impl ArbitrageService {
         let from_price = from_price.ok_or_else(|| anyhow::anyhow!("Price not found for {}", from_exchange))?;
         let to_price = to_price.ok_or_else(|| anyhow::anyhow!("Price not found for {}", to_exchange))?;
         
-        let (adjusted_from_price, adjusted_to_price) = self.adjust_prices_for_currency(&from_price, &to_price, from_exchange, to_exchange).await?;
+        let (adjusted_from_price, adjusted_to_price) = self.adjust_prices_for_currency(&from_price, &to_price, from_exchange, to_exchange, &fx_source).await?;
         
         let price_difference = &adjusted_to_price - &adjusted_from_price;
         let profit_percentage = (&price_difference / &adjusted_from_price) * BigDecimal::from(100);
         
-        let total_fees = self.calculate_total_fees(symbol, from_exchange, to_exchange).await?;
+        let total_fees = if include_fees {
+            self.calculate_total_fees(symbol, from_exchange, to_exchange).await?
+        } else {
+            BigDecimal::from(0)
+        };
         let estimated_profit_after_fees = &profit_percentage - &total_fees;
         let is_profitable = estimated_profit_after_fees > BigDecimal::from(0);
         
@@ -101,20 +122,42 @@ impl ArbitrageService {
         })
     }
     
-    async fn adjust_prices_for_currency(&self, from_price: &BigDecimal, to_price: &BigDecimal, from_exchange: &str, to_exchange: &str) -> Result<(BigDecimal, BigDecimal)> {
-        let usdt_krw_price = match self.get_usdt_krw_price().await {
-            Ok(price) => price,
-            Err(_) => self.exchange_rate_service.get_latest_usd_krw_rate().await.unwrap_or_else(|_| ExchangeRateService::get_fallback_usd_krw_rate())
+    async fn adjust_prices_for_currency(
+        &self,
+        from_price: &BigDecimal,
+        to_price: &BigDecimal,
+        from_exchange: &str,
+        to_exchange: &str,
+        fx_source: &FxSource,
+    ) -> Result<(BigDecimal, BigDecimal)> {
+        let fx_rate = match fx_source {
+            FxSource::UsdtKrw => {
+                match self.get_usdt_krw_price().await {
+                    Ok(price) => price,
+                    Err(_) => self
+                        .exchange_rate_service
+                        .get_latest_usd_krw_rate()
+                        .await
+                        .unwrap_or_else(|_| ExchangeRateService::get_fallback_usd_krw_rate()),
+                }
+            }
+            FxSource::UsdKrw => {
+                self
+                    .exchange_rate_service
+                    .get_latest_usd_krw_rate()
+                    .await
+                    .unwrap_or_else(|_| ExchangeRateService::get_fallback_usd_krw_rate())
+            }
         };
-        
+
         let adjusted_from = if from_exchange == "Binance" {
-            from_price * &usdt_krw_price
+            from_price * &fx_rate
         } else {
             from_price.clone()
         };
         
         let adjusted_to = if to_exchange == "Binance" {
-            to_price * &usdt_krw_price
+            to_price * &fx_rate
         } else {
             to_price.clone()
         };

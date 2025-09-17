@@ -8,6 +8,9 @@ use crate::services::ArbitrageService;
 pub struct ArbitrageQuery {
     from: String,
     to: String,
+    // optional controls
+    fx: Option<String>,     // usdkrw | usdtkrw
+    fees: Option<String>,   // include | exclude
 }
 
 fn normalize_exchange_name(name: &str) -> String {
@@ -27,10 +30,24 @@ pub async fn get_directional_arbitrage(
     let symbol = path.into_inner().to_uppercase();
     let from_exchange = normalize_exchange_name(&query.from);
     let to_exchange = normalize_exchange_name(&query.to);
+    let fx_source = match query.fx.as_deref().unwrap_or("usdtkrw").to_lowercase().as_str() {
+        "usdkrw" => crate::services::arbitrage_service::FxSource::UsdKrw,
+        _ => crate::services::arbitrage_service::FxSource::UsdtKrw,
+    };
+    let include_fees = match query.fees.as_deref().unwrap_or("include").to_lowercase().as_str() {
+        "exclude" => false,
+        _ => true,
+    };
     
     info!("Fetching arbitrage for {} from {} to {}", symbol, from_exchange, to_exchange);
     
-    match arbitrage_service.get_directional_arbitrage(&symbol, &from_exchange, &to_exchange).await {
+    match arbitrage_service.get_directional_arbitrage_with_options(
+        &symbol,
+        &from_exchange,
+        &to_exchange,
+        fx_source,
+        include_fees,
+    ).await {
         Ok(arbitrage) => {
             info!("Directional arbitrage for {} ({} -> {}): {}% profit", 
                   symbol, from_exchange, to_exchange, arbitrage.profit_percentage);
