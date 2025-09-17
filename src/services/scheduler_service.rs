@@ -26,7 +26,7 @@ impl SchedulerService {
         info!("Starting scheduler service");
 
         let exchange_service = Arc::clone(&self.exchange_service);
-        let price_collection_job = Job::new_async("0 * * * * *", move |_uuid, _l| {
+        let price_collection_job = Job::new_async("*/2 * * * * *", move |_uuid, _l| {
             let service = Arc::clone(&exchange_service);
             Box::pin(async move {
                 info!("Starting scheduled price collection");
@@ -39,7 +39,7 @@ impl SchedulerService {
         })?;
 
         let exchange_rate_service = Arc::clone(&self.exchange_rate_service);
-        let exchange_rate_job = Job::new_async("0 */2 * * * *", move |_uuid, _l| {
+        let exchange_rate_job = Job::new_async("*/10 * * * * *", move |_uuid, _l| {
             let service = Arc::clone(&exchange_rate_service);
             Box::pin(async move {
                 info!("Starting scheduled exchange rate update");
