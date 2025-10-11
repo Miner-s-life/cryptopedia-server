@@ -54,6 +54,17 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-appl
 .kbd{background:#0b1325;border:1px solid var(--border);padding:2px 6px;border-radius:6px;color:var(--muted);font-size:12px}
 .hint{color:var(--muted);font-size:12px;margin-left:6px}
 
+/* Pills / chips */
+.pill{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border:1px solid var(--border);color:var(--text);border-radius:999px;padding:4px 8px;font-size:12px}
+.pill .label{color:var(--muted); min-width:72px}
+.pill-row{display:flex;flex-wrap:wrap;gap:8px}
+.pill.warn{border-color:#b45309;background:rgba(180,83,9,0.12)}
+.pill.danger{border-color:#dc2626;background:rgba(220,38,38,0.12);animation:pulse 1s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,0.35)}70%{box-shadow:0 0 0 8px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}
+
+/* Fix width & numeric glyphs for countdown to avoid jitter */
+.pill .time{display:inline-block; min-width:72px; text-align:right; font-variant-numeric: tabular-nums}
+
 /* Numeric helpers to avoid column jitter */
 .num{font-variant-numeric: tabular-nums; display:inline-block; text-align:right}
 .num.price{min-width:12ch}

@@ -17,6 +17,18 @@ export default function App() {
   const [rangeMin, setRangeMin] = useState<number>(60);
   const [showAll, setShowAll] = useState<boolean>(false);
   const [priceTip, setPriceTip] = useState<{x:number,y:number,text:string}|null>(null);
+  const [tab, setTab] = useState<'scalping'|'kimchi'>(() => {
+    const v = localStorage.getItem('app_tab');
+    return (v === 'scalping' || v === 'kimchi') ? (v as 'scalping'|'kimchi') : 'kimchi';
+  });
+  const [tz, setTz] = useState<'KST'|'UTC'>(() => {
+    const v = localStorage.getItem('app_tz');
+    return (v === 'KST' || v === 'UTC') ? (v as 'KST'|'UTC') : 'KST';
+  });
+  const [ticks, setTicks] = useState<Record<string,string>>({});
+  const [ticksMs, setTicksMs] = useState<Record<string,number>>({});
+  const [ticksNext, setTicksNext] = useState<Record<string,number>>({}); // absolute UTC ms of next boundary
+  const [countTip, setCountTip] = useState<{x:number,y:number,text:string}|null>(null);
 
   const fmtKrwCompact = (val: number) => {
     if (!isFinite(val)) return '';
@@ -26,8 +38,111 @@ export default function App() {
     return '';
   };
 
+  // -------- Countdown helpers --------
+  const pad2 = (n:number)=> (n<10?`0${n}`:`${n}`);
+  const fmtRemain = (ms:number)=>{
+    if (ms < 0) ms = 0;
+    const s = Math.floor(ms/1000);
+    const hh = Math.floor(s/3600);
+    const mm = Math.floor((s%3600)/60);
+    const ss = s%60;
+    return hh>0? `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}` : `${pad2(mm)}:${pad2(ss)}`;
+  };
+  const offsetMsForTz = (zone:'KST'|'UTC') => zone==='KST'? 9*3600*1000 : 0;
+  const nextBoundaryMs = (zone:'KST'|'UTC', frame:'1m'|'5m'|'1h'|'6h'|'1d') => {
+    const now = Date.now();
+    const off = offsetMsForTz(zone);
+    const loc = new Date(now + off);
+    const y = loc.getUTCFullYear();
+    const mon = loc.getUTCMonth();
+    const d = loc.getUTCDate();
+    const h = loc.getUTCHours();
+    const m = loc.getUTCMinutes();
+    if (frame==='1m') {
+      const next = Date.UTC(y,mon,d,h,m,0,0) + 60*1000;
+      return next - (now + off);
+    }
+    if (frame==='5m') {
+      const bucket = Math.floor(m/5)*5;
+      const nextMinute = bucket + 5;
+      const next = Date.UTC(y,mon,d,h,nextMinute,0,0);
+      return next - (now + off);
+    }
+    if (frame==='1h') {
+      const next = Date.UTC(y,mon,d,h,0,0,0) + 3600*1000;
+      return next - (now + off);
+    }
+    if (frame==='6h') {
+      const bucket = Math.floor(h/6)*6;
+      const nextHour = bucket + 6;
+      const next = Date.UTC(y,mon,d,nextHour,0,0,0);
+      return next - (now + off);
+    }
+    // 1d
+    const next = Date.UTC(y,mon,d,0,0,0,0) + 24*3600*1000;
+    return next - (now + off);
+  };
+
+  const nextBoundaryAbs = (zone:'KST'|'UTC', frame:'1m'|'5m'|'1h'|'6h'|'1d') => {
+    // nextBoundaryMs returns delta-to-next-boundary accounting for zone.
+    // Absolute next boundary in UTC ms = now(UTC) + delta.
+    return Date.now() + nextBoundaryMs(zone, frame);
+  };
+
+  const fmtAbs = (zone:'KST'|'UTC', absUtcMs:number) => {
+    const off = offsetMsForTz(zone);
+    const dt = new Date(absUtcMs + off);
+    const y = dt.getUTCFullYear(); const mo = pad2(dt.getUTCMonth()+1); const da = pad2(dt.getUTCDate());
+    const hh = pad2(dt.getUTCHours()); const mm = pad2(dt.getUTCMinutes()); const ss = pad2(dt.getUTCSeconds());
+    return `${y}-${mo}-${da} ${hh}:${mm}:${ss} ${zone}`;
+  };
+
+  useEffect(()=>{
+    if (tab !== 'scalping') return;
+    const update = () => {
+      const m1 = nextBoundaryMs(tz,'1m');
+      const m5 = nextBoundaryMs(tz,'5m');
+      const h1 = nextBoundaryMs(tz,'1h');
+      const h6 = nextBoundaryMs(tz,'6h');
+      const d1u = nextBoundaryMs('UTC','1d');
+      const m1Abs = nextBoundaryAbs(tz,'1m');
+      const m5Abs = nextBoundaryAbs(tz,'5m');
+      const h1Abs = nextBoundaryAbs(tz,'1h');
+      const h6Abs = nextBoundaryAbs(tz,'6h');
+      const d1uAbs = nextBoundaryAbs('UTC','1d');
+      setTicks({
+        '1분봉': fmtRemain(m1),
+        '5분봉': fmtRemain(m5),
+        '1시간봉': fmtRemain(h1),
+        '6시간봉': fmtRemain(h6),
+        '1일봉': fmtRemain(d1u),
+      });
+      setTicksMs({
+        '1분봉': m1,
+        '5분봉': m5,
+        '1시간봉': h1,
+        '6시간봉': h6,
+        '1일봉': d1u,
+      });
+      setTicksNext({
+        '1분봉': m1Abs,
+        '5분봉': m5Abs,
+        '1시간봉': h1Abs,
+        '6시간봉': h6Abs,
+        '1일봉': d1uAbs,
+      });
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [tz, tab]);
+
   const getIconUrl = (symbol: string) =>
     `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@latest/svg/color/${symbol.toLowerCase()}.svg`;
+
+  // persist UI prefs
+  useEffect(()=>{ localStorage.setItem('app_tab', tab); }, [tab]);
+  useEffect(()=>{ localStorage.setItem('app_tz', tz); }, [tz]);
 
   const fmtNumber = (val: string | number, digits = 2) => {
     const n = typeof val === 'number' ? val : parseFloat(String(val));
@@ -202,7 +317,8 @@ export default function App() {
         <div className="brand"><span className="dot" />Crypto Arb</div>
         <nav className="nav">
           <h4>탐색</h4>
-          <a href="#">김치 프리미엄</a>
+          <a href="#" onClick={(e)=>{e.preventDefault(); setTab('scalping');}} style={{background: tab==='scalping' ? 'var(--chip)' : undefined}}>단타</a>
+          <a href="#" onClick={(e)=>{e.preventDefault(); setTab('kimchi');}} style={{background: tab==='kimchi' ? 'var(--chip)' : undefined}}>김치 프리미엄</a>
         </nav>
         <div style={{marginTop:'auto',fontSize:12,color:'var(--muted)'}}>v0.1.0</div>
       </aside>
@@ -210,144 +326,223 @@ export default function App() {
       {/* Content */}
       <section className="content">
         {/* Header controls */}
-        <header className="header">
-          <div style={{fontWeight:700}}>김치 프리미엄</div>
-          <div className="controls">
-            <select className="select" value={fromEx} onChange={e=>setFromEx(e.target.value as any)}>
-              {EXCHANGES.map(x=> <option key={x} value={x}>{x}</option>)}
-            </select>
-            <select className="select" value={toEx} onChange={e=>setToEx(e.target.value as any)}>
-              {EXCHANGES.map(x=> <option key={x} value={x}>{x}</option>)}
-            </select>
-            <select className="select" value={fx} onChange={e=>setFx(e.target.value as FxType)}>
-              <option value="usdtkrw">USDT/KRW</option>
-              <option value="usdkrw">USD/KRW</option>
-            </select>
-            <span className="hint">업데이트: {lastUpdated || '-'}</span>
-            <span className="hint" style={{marginLeft:8}}>코인: {rows.length}개</span>
-            {rows.length > 0 && (
-              <span className="hint" style={{marginLeft:8}}>
-                환율: {rows[0].fx_type.toUpperCase()} {fmtNumber(parseFloat(rows[0].fx_rate), 4)}
-              </span>
-            )}
-          </div>
-        </header>
-
-        {/* Page */}
-        <div className="page">
-          <div className="hero card">
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <div>
-                <div style={{fontSize:18,fontWeight:700}}>내 환급 수수료 확인하기</div>
-                <div className="hint">USDT 환전 기준 수수료를 확인하고 더 나은 방향을 찾으세요.</div>
+        {tab === 'scalping' && (
+          <>
+            <header className="header">
+              <div style={{fontWeight:700}}>단타</div>
+              <div className="controls">
+                <select className="select" value={tz} onChange={e=>setTz(e.target.value as 'KST'|'UTC')}>
+                  <option value="KST">KST (UTC+9)</option>
+                  <option value="UTC">UTC</option>
+                </select>
               </div>
-              <div>
-                <span className="kbd">F</span><span className="hint"> 빠른 검색</span>
-              </div>
-            </div>
-          </div>
-          {priceTip && (
-            <div style={{position:'fixed', left: priceTip.x, top: priceTip.y, background:'var(--card)', border:'1px solid var(--border)', borderRadius:6, padding:'6px 8px', fontSize:12, boxShadow:'0 4px 12px rgba(0,0,0,0.12)', pointerEvents:'none'}}>
-              {priceTip.text}
-            </div>
-          )}
-          <Chart />
+            </header>
 
-          <div className="card table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>코인</th>
-                  <th>From</th>
-                  <th>To</th>
-                  <th>프리미엄</th>
-                  <th>거래대금(합·KRW)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={4} style={{color:'var(--muted)',padding:'18px'}}>데이터 준비 중...</td>
-                  </tr>
-                )}
-                {(showAll ? rows : rows.slice(0, 15)).map((data)=> {
-                  const fn = data.from_notional_24h ? parseFloat(String(data.from_notional_24h)) : NaN;
-                  const tn = data.to_notional_24h ? parseFloat(String(data.to_notional_24h)) : NaN;
-                  const sum = (isFinite(fn)?fn:0) + (isFinite(tn)?tn:0);
-                  const sumCompact = fmtKrwCompact(sum);
-                  const fx = parseFloat(String(data.fx_rate));
-                  const fromIsBinance = data.from_exchange === 'Binance';
-                  const toIsBinance = data.to_exchange === 'Binance';
-                  const fromQuoteCcy = (data.fx_type === 'usdtkrw') ? 'USDT' : 'USD';
-                  const toQuoteCcy = (data.fx_type === 'usdtkrw') ? 'USDT' : 'USD';
-                  const fromQuote = fromIsBinance && isFinite(fx) && fx !== 0 ? (parseFloat(String(data.from_price)) / fx) : null;
-                  const toQuote = toIsBinance && isFinite(fx) && fx !== 0 ? (parseFloat(String(data.to_price)) / fx) : null;
-                  return (
-                  <tr key={`${data.symbol}-${data.from_exchange}-${data.to_exchange}`}>
-                    <td>
-                      <div className="coin">
-                        <img
-                          src={getIconUrl(data.symbol)}
-                          alt={data.symbol}
-                          onError={(e)=>{
-                            const img = e.currentTarget as HTMLImageElement;
-                            const tried = img.getAttribute('data-fallback');
-                            if (!tried) {
-                              img.setAttribute('data-fallback','png');
-                              img.src = `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@latest/png/color/${data.symbol.toLowerCase()}.png`;
-                            } else {
-                              img.style.display='none';
-                            }
-                          }}
-                        />
-                        <span style={{fontWeight:700}}>{data.symbol}</span>
+            {/* Page */}
+            <div className="page">
+              <div className="hero card">
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                  <div>
+                    <div style={{fontSize:18,fontWeight:700}}>주요 시간대 카운트다운</div>
+                    <div className="hint">타임프레임 리셋까지 남은 시간과 일봉 리셋(KST/UTC)을 확인하세요.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card" style={{padding:16, position:'relative'}}>
+                <div className="pill-row">
+                  {Object.entries(ticks).map(([k,v])=> {
+                    const ms = ticksMs[k] ?? 0;
+                    // Use floor like fmtRemain() does so thresholds match the visible seconds
+                    const secs = Math.floor(ms / 1000);
+                    const isLong = (k==='1시간봉' || k==='6시간봉' || k==='1일봉');
+                    let cls = 'pill';
+                    if (secs <= 1) {
+                      cls = 'pill danger';
+                    } else if (isLong) {
+                      // Long frames: customize thresholds per frame
+                      if (k==='1시간봉') {
+                        // 1h: warn <= 3m, danger <= 1m
+                        cls = secs <= 60 ? 'pill danger' : (secs <= 180 ? 'pill warn' : 'pill');
+                      } else {
+                        // 6h, 1d: warn <= 30m, danger <= 10m
+                        cls = secs <= 600 ? 'pill danger' : (secs <= 1800 ? 'pill warn' : 'pill');
+                      }
+                    } else if (k==='1분봉') {
+                      // 1m: warn <= 15s, danger <= 5s
+                      cls = secs <= 5 ? 'pill danger' : (secs <= 15 ? 'pill warn' : 'pill');
+                    } else if (k==='5분봉') {
+                      // 5m: warn <= 60s, danger <= 30s
+                      cls = secs <= 30 ? 'pill danger' : (secs <= 60 ? 'pill warn' : 'pill');
+                    }
+                    const zoneFor: 'KST'|'UTC' = (k==='1일봉(UTC)') ? 'UTC' : tz;
+                    const abs = ticksNext[k];
+                    return (
+                      <div
+                        key={k}
+                        className={cls}
+                        onMouseMove={(e)=>{
+                          if (!abs) return;
+                          setCountTip({ x: e.clientX+12, y: e.clientY+12, text: `다음 갱신: ${fmtAbs(zoneFor, abs)}`});
+                        }}
+                        onMouseLeave={()=> setCountTip(null)}
+                      >
+                        <span className="label">{k}</span><span className="time">{v}</span>
                       </div>
-                    </td>
-                    <td>
-                      <span
-                        className="num price"
-                        onMouseMove={e=>{
-                          if (fromQuote != null) setPriceTip({ x: e.clientX+12, y: e.clientY+12, text: `≈ ${fmtNumber(fromQuote, 4)} ${fromQuoteCcy}`});
-                        }}
-                        onMouseLeave={()=> setPriceTip(null)}
-                      >{fmtNumber(data.from_price, 2)}</span> <span className="unit">KRW</span>
-                    </td>
-                    <td>
-                      <span
-                        className="num price"
-                        onMouseMove={e=>{
-                          if (toQuote != null) setPriceTip({ x: e.clientX+12, y: e.clientY+12, text: `≈ ${fmtNumber(toQuote, 4)} ${toQuoteCcy}`});
-                        }}
-                        onMouseLeave={()=> setPriceTip(null)}
-                      >{fmtNumber(data.to_price, 2)}</span> <span className="unit">KRW</span>
-                    </td>
-                    <td>
-                      <span className={`badge ${Number(data.profit_percentage) >= 0 ? 'up':'down'} num pct`}>
-                        {fmtPercent(data.profit_percentage, 2)}%
-                      </span>
-                    </td>
-                    <td>
-                      <span className="num">₩ {fmtNumber(sum, 0)}</span>
-                      {sumCompact && <span className="unit" style={{marginLeft:6}}>({sumCompact})</span>}
-                    </td>
-                  </tr>
-                )})}
-              </tbody>
-            </table>
-            {!showAll && rows.length > 15 && (
-              <div style={{display:'flex', justifyContent:'center', padding:'12px'}}>
-                <button className="btn" onClick={()=>setShowAll(true)}>더보기</button>
+                    );
+                  })}
+                </div>
+                {countTip && (
+                  <div style={{position:'fixed', left: countTip.x, top: countTip.y, background:'var(--card)', border:'1px solid var(--border)', borderRadius:6, padding:'6px 8px', fontSize:12, boxShadow:'0 4px 12px rgba(0,0,0,0.12)', pointerEvents:'none'}}>
+                    {countTip.text}
+                  </div>
+                )}
               </div>
-            )}
-            {showAll && rows.length > 15 && (
-              <div style={{display:'flex', justifyContent:'center', padding:'12px'}}>
-                <button className="btn" onClick={()=>setShowAll(false)}>접기</button>
-              </div>
-            )}
-          </div>
+            </div>
+          </>
+        )}
+        {tab === 'kimchi' && (
+          <>
+          <header className="header">
+            <div style={{fontWeight:700}}>김치 프리미엄</div>
+            <div className="controls">
+              <select className="select" value={fromEx} onChange={e=>setFromEx(e.target.value as any)}>
+                {EXCHANGES.map(x=> <option key={x} value={x}>{x}</option>)}
+              </select>
+              <select className="select" value={toEx} onChange={e=>setToEx(e.target.value as any)}>
+                {EXCHANGES.map(x=> <option key={x} value={x}>{x}</option>)}
+              </select>
+              <select className="select" value={fx} onChange={e=>setFx(e.target.value as FxType)}>
+                <option value="usdtkrw">USDT/KRW</option>
+                <option value="usdkrw">USD/KRW</option>
+              </select>
+              <span className="hint">업데이트: {lastUpdated || '-'}</span>
+              <span className="hint" style={{marginLeft:8}}>코인: {rows.length}개</span>
+              {rows.length > 0 && (
+                <span className="hint" style={{marginLeft:8}}>
+                  환율: {rows[0].fx_type.toUpperCase()} {fmtNumber(parseFloat(rows[0].fx_rate), 4)}
+                </span>
+              )}
+            </div>
+          </header>
 
-          {err && <div style={{ color: 'var(--danger)', marginTop: 12 }}>{String(err)}</div>}
-        </div>
+          {/* Page */}
+          <div className="page">
+            <div className="hero card">
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div>
+                  <div style={{fontSize:18,fontWeight:700}}>내 환급 수수료 확인하기</div>
+                  <div className="hint">USDT 환전 기준 수수료를 확인하고 더 나은 방향을 찾으세요.</div>
+                </div>
+                <div>
+                  <span className="kbd">F</span><span className="hint"> 빠른 검색</span>
+                </div>
+              </div>
+            </div>
+            {priceTip && (
+              <div style={{position:'fixed', left: priceTip.x, top: priceTip.y, background:'var(--card)', border:'1px solid var(--border)', borderRadius:6, padding:'6px 8px', fontSize:12, boxShadow:'0 4px 12px rgba(0,0,0,0.12)', pointerEvents:'none'}}>
+                {priceTip.text}
+              </div>
+            )}
+            <Chart />
+
+            <div className="card table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>코인</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>프리미엄</th>
+                    <th>거래대금(합·KRW)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 && !loading && (
+                    <tr>
+                      <td colSpan={4} style={{color:'var(--muted)',padding:'18px'}}>데이터 준비 중...</td>
+                    </tr>
+                  )}
+                  {(showAll ? rows : rows.slice(0, 15)).map((data)=> {
+                    const fn = data.from_notional_24h ? parseFloat(String(data.from_notional_24h)) : NaN;
+                    const tn = data.to_notional_24h ? parseFloat(String(data.to_notional_24h)) : NaN;
+                    const sum = (isFinite(fn)?fn:0) + (isFinite(tn)?tn:0);
+                    const sumCompact = fmtKrwCompact(sum);
+                    const fx = parseFloat(String(data.fx_rate));
+                    const fromIsBinance = data.from_exchange === 'Binance';
+                    const toIsBinance = data.to_exchange === 'Binance';
+                    const fromQuoteCcy = (data.fx_type === 'usdtkrw') ? 'USDT' : 'USD';
+                    const toQuoteCcy = (data.fx_type === 'usdtkrw') ? 'USDT' : 'USD';
+                    const fromQuote = fromIsBinance && isFinite(fx) && fx !== 0 ? (parseFloat(String(data.from_price)) / fx) : null;
+                    const toQuote = toIsBinance && isFinite(fx) && fx !== 0 ? (parseFloat(String(data.to_price)) / fx) : null;
+                    return (
+                    <tr key={`${data.symbol}-${data.from_exchange}-${data.to_exchange}`}>
+                      <td>
+                        <div className="coin">
+                          <img
+                            src={getIconUrl(data.symbol)}
+                            alt={data.symbol}
+                            onError={(e)=>{
+                              const img = e.currentTarget as HTMLImageElement;
+                              const tried = img.getAttribute('data-fallback');
+                              if (!tried) {
+                                img.setAttribute('data-fallback','png');
+                                img.src = `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@latest/png/color/${data.symbol.toLowerCase()}.png`;
+                              } else {
+                                img.style.display='none';
+                              }
+                            }}
+                          />
+                          <span style={{fontWeight:700}}>{data.symbol}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className="num price"
+                          onMouseMove={e=>{
+                            if (fromQuote != null) setPriceTip({ x: e.clientX+12, y: e.clientY+12, text: `≈ ${fmtNumber(fromQuote, 4)} ${fromQuoteCcy}`});
+                          }}
+                          onMouseLeave={()=> setPriceTip(null)}
+                        >{fmtNumber(data.from_price, 2)}</span> <span className="unit">KRW</span>
+                      </td>
+                      <td>
+                        <span
+                          className="num price"
+                          onMouseMove={e=>{
+                            if (toQuote != null) setPriceTip({ x: e.clientX+12, y: e.clientY+12, text: `≈ ${fmtNumber(toQuote, 4)} ${toQuoteCcy}`});
+                          }}
+                          onMouseLeave={()=> setPriceTip(null)}
+                        >{fmtNumber(data.to_price, 2)}</span> <span className="unit">KRW</span>
+                      </td>
+                      <td>
+                        <span className={`badge ${Number(data.profit_percentage) >= 0 ? 'up':'down'} num pct`}>
+                          {fmtPercent(data.profit_percentage, 2)}%
+                        </span>
+                      </td>
+                      <td>
+                        <span className="num">₩ {fmtNumber(sum, 0)}</span>
+                        {sumCompact && <span className="unit" style={{marginLeft:6}}>({sumCompact})</span>}
+                      </td>
+                    </tr>
+                  )})}
+                </tbody>
+              </table>
+              {!showAll && rows.length > 15 && (
+                <div style={{display:'flex', justifyContent:'center', padding:'12px'}}>
+                  <button className="btn" onClick={()=>setShowAll(true)}>더보기</button>
+                </div>
+              )}
+              {showAll && rows.length > 15 && (
+                <div style={{display:'flex', justifyContent:'center', padding:'12px'}}>
+                  <button className="btn" onClick={()=>setShowAll(false)}>접기</button>
+                </div>
+              )}
+            </div>
+
+            {err && <div style={{ color: 'var(--danger)', marginTop: 12 }}>{String(err)}</div>}
+          </div>
+          </>
+        )}
       </section>
     </div>
   );
