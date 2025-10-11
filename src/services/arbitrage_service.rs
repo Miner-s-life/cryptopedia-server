@@ -99,7 +99,9 @@ impl ArbitrageService {
         let from_price = from_price.ok_or_else(|| anyhow::anyhow!("Price not found for {}", from_exchange))?;
         let to_price = to_price.ok_or_else(|| anyhow::anyhow!("Price not found for {}", to_exchange))?;
         
-        let (adjusted_from_price, adjusted_to_price) = self.adjust_prices_for_currency(&from_price, &to_price, from_exchange, to_exchange, &fx_source).await?;
+        let (adjusted_from_price, adjusted_to_price, fx_rate, fx_type) = self
+            .adjust_prices_for_currency(&from_price, &to_price, from_exchange, to_exchange, &fx_source)
+            .await?;
         
         let price_difference = &adjusted_to_price - &adjusted_from_price;
         let profit_percentage = (&price_difference / &adjusted_from_price) * BigDecimal::from(100);
@@ -123,6 +125,8 @@ impl ArbitrageService {
             estimated_profit_after_fees,
             total_fees,
             is_profitable,
+            fx_type,
+            fx_rate,
         })
     }
     
@@ -133,7 +137,7 @@ impl ArbitrageService {
         from_exchange: &str,
         to_exchange: &str,
         fx_source: &FxSource,
-    ) -> Result<(BigDecimal, BigDecimal)> {
+    ) -> Result<(BigDecimal, BigDecimal, BigDecimal, String)> {
         let fx_rate = match fx_source {
             FxSource::UsdtKrw => {
                 match self.get_usdt_krw_price().await {
@@ -165,8 +169,8 @@ impl ArbitrageService {
         } else {
             to_price.clone()
         };
-        
-        Ok((adjusted_from, adjusted_to))
+        let fx_type = match fx_source { FxSource::UsdKrw => "usdkrw", FxSource::UsdtKrw => "usdtkrw" }.to_string();
+        Ok((adjusted_from, adjusted_to, fx_rate, fx_type))
     }
 
     async fn get_usdt_krw_price(&self) -> Result<BigDecimal> {
@@ -182,5 +186,50 @@ impl ArbitrageService {
         }
         
         Err(anyhow::anyhow!("USDT price not found"))
+    }
+
+    pub async fn get_directional_arbitrage_list(
+        &self,
+        from_exchange: &str,
+        to_exchange: &str,
+        fx_source: FxSource,
+        include_fees: bool,
+        limit: Option<i64>,
+    ) -> Result<Vec<DirectionalArbitrage>> {
+        // 1) 심볼 목록 조회
+        let symbols: Vec<String> = if let Some(lim) = limit {
+            let rows = sqlx::query!(
+                "SELECT symbol FROM coins WHERE is_active = true ORDER BY symbol LIMIT ?",
+                lim
+            )
+            .fetch_all(&self.db)
+            .await?;
+            rows.into_iter().map(|r| r.symbol).collect()
+        } else {
+            let rows = sqlx::query!(
+                "SELECT symbol FROM coins WHERE is_active = true ORDER BY symbol"
+            )
+            .fetch_all(&self.db)
+            .await?;
+            rows.into_iter().map(|r| r.symbol).collect()
+        };
+
+        // 2) 각 심볼에 대해 계산 (초기 버전: 순차 실행)
+        let mut out: Vec<DirectionalArbitrage> = Vec::with_capacity(symbols.len());
+        for sym in symbols {
+            match self
+                .get_directional_arbitrage_with_options(&sym, from_exchange, to_exchange, fx_source, include_fees)
+                .await
+            {
+                Ok(item) => out.push(item),
+                Err(_) => {
+                    // 개별 실패는 건너뜀
+                }
+            }
+        }
+
+        // 3) 프리미엄 내림차순 정렬
+        out.sort_by(|a, b| b.profit_percentage.cmp(&a.profit_percentage));
+        Ok(out)
     }
 }

@@ -27,6 +27,8 @@ pub struct DirectionalArbitrage {
     pub estimated_profit_after_fees: BigDecimal,
     pub total_fees: BigDecimal,
     pub is_profitable: bool,
+    pub fx_type: String,       // "usdkrw" or "usdtkrw"
+    pub fx_rate: BigDecimal,   // applied rate used for conversion
 }
 
 #[derive(Debug, Serialize, Deserialize)]

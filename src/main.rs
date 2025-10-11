@@ -76,6 +76,7 @@ async fn main() -> Result<()> {
             .wrap(Logger::default())
             .service(
                 web::scope("/api/v1")
+                    .route("/arbitrage", web::get().to(get_arbitrage_list))
                     .route("/arbitrage/{symbol}", web::get().to(get_directional_arbitrage))
             )
     })

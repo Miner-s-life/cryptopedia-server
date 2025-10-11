@@ -13,6 +13,52 @@ pub struct ArbitrageQuery {
     fees: Option<String>,   // include | exclude
 }
 
+#[derive(Deserialize)]
+pub struct ArbitrageListQuery {
+    from: String,
+    to: String,
+    // optional controls
+    fx: Option<String>,     // usdkrw | usdtkrw (default: usdkrw)
+    fees: Option<String>,   // include | exclude (default: exclude)
+    limit: Option<i64>,
+}
+
+pub async fn get_arbitrage_list(
+    query: web::Query<ArbitrageListQuery>,
+    arbitrage_service: web::Data<ArbitrageService>,
+) -> Result<HttpResponse> {
+    let from_exchange = normalize_exchange_name(&query.from);
+    let to_exchange = normalize_exchange_name(&query.to);
+    let fx_source = match query.fx.as_deref().unwrap_or("usdkrw").to_lowercase().as_str() {
+        "usdtkrw" => crate::services::arbitrage_service::FxSource::UsdtKrw,
+        _ => crate::services::arbitrage_service::FxSource::UsdKrw,
+    };
+    let include_fees = matches!(query.fees.as_deref(), Some("include"));
+
+    info!(
+        "Fetching arbitrage list for {} -> {} (fx={}, fees={}, limit={:?})",
+        from_exchange,
+        to_exchange,
+        if matches!(fx_source, crate::services::arbitrage_service::FxSource::UsdKrw) { "usdkrw" } else { "usdtkrw" },
+        if include_fees { "include" } else { "exclude" },
+        query.limit
+    );
+
+    match arbitrage_service
+        .get_directional_arbitrage_list(&from_exchange, &to_exchange, fx_source, include_fees, query.limit)
+        .await
+    {
+        Ok(list) => Ok(HttpResponse::Ok().json(list)),
+        Err(e) => {
+            error!(
+                "Failed to get arbitrage list ({} -> {}): {}",
+                from_exchange, to_exchange, e
+            );
+            Ok(HttpResponse::InternalServerError().json(format!("Error: {}", e)))
+        }
+    }
+}
+
 fn normalize_exchange_name(name: &str) -> String {
     match name.to_lowercase().as_str() {
         "binance" => "Binance".to_string(),
