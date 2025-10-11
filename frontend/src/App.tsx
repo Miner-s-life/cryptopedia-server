@@ -202,6 +202,9 @@ export default function App() {
     const h = 200;
     const padL = 44; // left for y-axis labels
     const padB = 22; // bottom for x-axis labels
+    const [tip, setTip] = useState<{x:number,y:number,text:string}|null>(null);
+    const [isHover, setIsHover] = useState<boolean>(false);
+    const containerRef = useRef<HTMLDivElement | null>(null);
     if (hist.length === 0) return <div className="card" style={{padding:12, marginBottom:12}}>히스토리 없음</div>;
     const pts = hist.map(p => ({
       ts: p.ts,
@@ -234,8 +237,38 @@ export default function App() {
     const yTicks = 4;
     const yTickVals = Array.from({length:yTicks+1}, (_,i)=> minY + (i*(maxY-minY)/yTicks));
     const fmtTime = (t:number) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    // Global hide guards
+    useEffect(()=>{
+      const hide = () => { setTip(null); setHoverX(null); };
+      const onMove = (e: MouseEvent) => {
+        const el = containerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const x = e.clientX, y = e.clientY;
+        const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        if (!inside) hide();
+      };
+      window.addEventListener('scroll', hide, true);
+      window.addEventListener('resize', hide);
+      window.addEventListener('blur', hide);
+      document.addEventListener('visibilitychange', ()=>{ if (document.hidden) hide(); });
+      window.addEventListener('mousemove', onMove, true);
+      return ()=>{
+        window.removeEventListener('scroll', hide, true);
+        window.removeEventListener('resize', hide);
+        window.removeEventListener('blur', hide);
+        document.removeEventListener('visibilitychange', ()=>{ if (document.hidden) hide(); });
+        window.removeEventListener('mousemove', onMove, true);
+      };
+    }, []);
     return (
-      <div className="card" style={{padding:12, marginBottom:12, position:'relative'}}>
+      <div
+        ref={containerRef}
+        className="card"
+        style={{padding:12, marginBottom:12, position:'relative'}}
+        onMouseEnter={()=> setIsHover(true)}
+        onMouseLeave={()=>{ setIsHover(false); setTip(null); setHoverX(null); }}
+      >
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
           <div style={{fontWeight:700}}>ETH 김프 추이</div>
           <select className="select" value={rangeMin} onChange={e=>setRangeMin(parseInt(e.target.value,10))}>
@@ -253,10 +286,26 @@ export default function App() {
                pt.x = e.clientX;
                pt.y = e.clientY;
                const loc = pt.matrixTransform(ctm.inverse());
-               const clampedX = Math.max(padL, Math.min(w - 10, loc.x));
-               setHoverX(clampedX);
+               // Only show when inside inner plot horizontally
+               if (loc.x < padL || loc.x > (w - 10)) {
+                 setHoverX(null);
+                 setTip(null);
+                 return;
+               }
+               const clampedX = loc.x;
+               setHoverX(loc.x);
+               // tooltip at cursor (screen coords)
+               const nearestPt = (()=>{
+                 let best = 0, bestDist = Number.MAX_VALUE;
+                 for (let i=0;i<pts.length;i++) { const dx = Math.abs(sx(pts[i].x) - clampedX); if (dx < bestDist) { bestDist = dx; best = i; } }
+                 return pts[best];
+               })();
+               if (nearestPt) {
+                 const text = `${new Date(nearestPt.x).toLocaleString()}\n김프 ${nearestPt.y.toFixed(2)}%  |  From ₩ ${fmtNumber(nearestPt.fp,0)}  |  To ₩ ${fmtNumber(nearestPt.tp,0)}`;
+                 setTip({ x: e.clientX + 12, y: e.clientY + 12, text });
+               }
              }}
-             onMouseLeave={()=>setHoverX(null)}>
+             onMouseLeave={()=>{ setHoverX(null); setTip(null); }}>
           {/* Axes */}
           <line x1={padL} y1={10} x2={padL} y2={h-padB} stroke="#e5e7eb" />
           <line x1={padL} y1={h-padB} x2={w-10} y2={h-padB} stroke="#e5e7eb" />
@@ -297,13 +346,9 @@ export default function App() {
             </g>
           )}
         </svg>
-        {hoverX != null && nearest && (
-          <div style={{position:'absolute', left: Math.min(w-200, Math.max(padL, hoverX+8)), top: 32, background:'var(--card)', border:'1px solid var(--border)', borderRadius:6, padding:'8px 10px', fontSize:12, boxShadow:'0 4px 12px rgba(0,0,0,0.12)'}}>
-            <div style={{fontWeight:700, marginBottom:4}}>{new Date(nearest.x).toLocaleString()}</div>
-            <div>김프: <span className="num">{nearest.y.toFixed(2)}%</span></div>
-            <div>From: <span className="num">₩ {fmtNumber(nearest.fp, 0)}</span></div>
-            <div>To: <span className="num">₩ {fmtNumber(nearest.tp, 0)}</span></div>
-            <div>거래대금 합: <span className="num">₩ {fmtNumber((isFinite(nearest.fn)?nearest.fn:0)+(isFinite(nearest.tn)?nearest.tn:0), 0)}</span></div>
+        {isHover && tip && (
+          <div style={{position:'fixed', left: tip.x, top: tip.y, whiteSpace:'pre', background:'var(--card)', border:'1px solid var(--border)', borderRadius:6, padding:'8px 10px', fontSize:12, boxShadow:'0 4px 12px rgba(0,0,0,0.12)', pointerEvents:'none'}}>
+            {tip.text}
           </div>
         )}
       </div>
