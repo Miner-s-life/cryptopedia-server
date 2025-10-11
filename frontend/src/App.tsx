@@ -31,13 +31,20 @@ export default function App() {
     if (!firstLoaded.current) setLoading(true);
     try {
       const data = await fetchArbitrageList({ from: fromEx, to: toEx, fx, fees: 'exclude', limit: 200 });
-      // 첫 로딩에는 정렬하여 초기 순서 확정
+      // 첫 로딩에는 KRW 거래대금 합(from+to) 내림차순으로 한 번 정렬, 이후에는 기존 순서 유지
       if (!firstLoaded.current) {
-        data.sort((a,b)=> parseFloat(b.profit_percentage) - parseFloat(a.profit_percentage));
+        const notionalSum = (d: DirectionalArbitrage) => {
+          const fn = d.from_notional_24h ? parseFloat(String(d.from_notional_24h)) : NaN;
+          const tn = d.to_notional_24h ? parseFloat(String(d.to_notional_24h)) : NaN;
+          const fs = isFinite(fn) ? fn : 0;
+          const ts = isFinite(tn) ? tn : 0;
+          const sum = fs + ts;
+          return isFinite(sum) ? sum : Number.NEGATIVE_INFINITY;
+        };
+        data.sort((a,b)=> notionalSum(b) - notionalSum(a));
         setRows(data);
         firstLoaded.current = true;
       } else {
-        // 이후에는 기존 순서를 유지하며 값만 갱신
         const bySymbol = new Map(data.map(d => [d.symbol, d] as const));
         setRows(prev => prev.map(r => bySymbol.get(r.symbol) ?? r));
       }
@@ -85,6 +92,7 @@ export default function App() {
               <option value="usdkrw">USD/KRW</option>
             </select>
             <span className="hint">업데이트: {lastUpdated || '-'}</span>
+            <span className="hint" style={{marginLeft:8}}>코인: {rows.length}개</span>
             {rows.length > 0 && (
               <span className="hint" style={{marginLeft:8}}>
                 환율: {rows[0].fx_type.toUpperCase()} {fmtNumber(parseFloat(rows[0].fx_rate), 4)}
@@ -115,6 +123,7 @@ export default function App() {
                   <th>From</th>
                   <th>To</th>
                   <th>프리미엄</th>
+                  <th>거래대금(합·KRW)</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,7 +132,11 @@ export default function App() {
                     <td colSpan={4} style={{color:'var(--muted)',padding:'18px'}}>데이터 준비 중...</td>
                   </tr>
                 )}
-                {rows.map((data)=> (
+                {rows.map((data)=> {
+                  const fn = data.from_notional_24h ? parseFloat(String(data.from_notional_24h)) : NaN;
+                  const tn = data.to_notional_24h ? parseFloat(String(data.to_notional_24h)) : NaN;
+                  const sum = (isFinite(fn)?fn:0) + (isFinite(tn)?tn:0);
+                  return (
                   <tr key={`${data.symbol}-${data.from_exchange}-${data.to_exchange}`}>
                     <td style={{fontWeight:700}}>{data.symbol}</td>
                     <td><span className="num price">{fmtNumber(data.from_price, 2)}</span></td>
@@ -133,8 +146,9 @@ export default function App() {
                         {fmtPercent(data.profit_percentage, 2)}%
                       </span>
                     </td>
+                    <td><span className="num">₩ {fmtNumber(sum, 0)}</span></td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

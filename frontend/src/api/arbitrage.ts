@@ -6,6 +6,10 @@ export interface DirectionalArbitrage {
   to_exchange: string;
   from_price: string;
   to_price: string;
+  from_volume_24h?: string | null;
+  to_volume_24h?: string | null;
+  from_notional_24h?: string | null; // KRW
+  to_notional_24h?: string | null;   // KRW
   price_difference: string;
   profit_percentage: string;
   estimated_profit_after_fees: string;

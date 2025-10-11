@@ -22,6 +22,10 @@ pub struct DirectionalArbitrage {
     pub to_exchange: String,
     pub from_price: BigDecimal,
     pub to_price: BigDecimal,
+    pub from_volume_24h: Option<BigDecimal>,
+    pub to_volume_24h: Option<BigDecimal>,
+    pub from_notional_24h: Option<BigDecimal>, // KRW
+    pub to_notional_24h: Option<BigDecimal>,   // KRW
     pub price_difference: BigDecimal,
     pub profit_percentage: BigDecimal,
     pub estimated_profit_after_fees: BigDecimal,

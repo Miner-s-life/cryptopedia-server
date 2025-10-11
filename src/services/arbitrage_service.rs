@@ -71,6 +71,35 @@ impl ArbitrageService {
         Ok(prices)
     }
 
+    async fn get_latest_price_volume_for_symbol(&self, symbol: &str) -> Result<Vec<(String, BigDecimal, Option<BigDecimal>)>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT name, price, volume_24h FROM (
+              SELECT e.name AS name, pd.price, pd.volume_24h,
+                     ROW_NUMBER() OVER (PARTITION BY e.name ORDER BY pd.timestamp DESC) AS rn
+              FROM price_data pd
+              JOIN exchanges e ON pd.exchange_id = e.id
+              JOIN coins c ON pd.coin_id = c.id
+              WHERE c.symbol = ?
+                AND pd.timestamp >= NOW() - INTERVAL 30 MINUTE
+            ) t
+            WHERE rn = 1
+            "#
+        )
+        .bind(symbol)
+        .fetch_all(&self.db)
+        .await?;
+
+        let mut out: Vec<(String, BigDecimal, Option<BigDecimal>)> = Vec::with_capacity(rows.len());
+        for row in rows {
+            let name: String = row.try_get("name")?;
+            let price: BigDecimal = row.try_get("price")?;
+            let volume: Option<BigDecimal> = row.try_get("volume_24h")?;
+            out.push((name, price, volume));
+        }
+        Ok(out)
+    }
+
     pub async fn get_directional_arbitrage_with_options(
         &self,
         symbol: &str,
@@ -79,16 +108,19 @@ impl ArbitrageService {
         fx_source: FxSource,
         include_fees: bool,
     ) -> Result<DirectionalArbitrage> {
-        let prices = self.get_latest_prices_for_symbol(symbol).await?;
-        
+        let rows = self.get_latest_price_volume_for_symbol(symbol).await?;
         let mut from_price: Option<BigDecimal> = None;
         let mut to_price: Option<BigDecimal> = None;
+        let mut from_vol: Option<BigDecimal> = None;
+        let mut to_vol: Option<BigDecimal> = None;
         
-        for (exchange_name, price) in prices {
+        for (exchange_name, price, volume) in rows {
             if exchange_name == from_exchange {
                 from_price = Some(price);
+                from_vol = volume;
             } else if exchange_name == to_exchange {
                 to_price = Some(price);
+                to_vol = volume;
             }
         }
         
@@ -110,12 +142,20 @@ impl ArbitrageService {
         let estimated_profit_after_fees = &profit_percentage - &total_fees;
         let is_profitable = estimated_profit_after_fees > BigDecimal::from(0);
         
+        // Compute KRW notionals (price already adjusted to KRW when needed)
+        let from_notional_24h = from_vol.as_ref().map(|v| &adjusted_from_price * v);
+        let to_notional_24h = to_vol.as_ref().map(|v| &adjusted_to_price * v);
+
         Ok(DirectionalArbitrage {
             symbol: symbol.to_string(),
             from_exchange: from_exchange.to_string(),
             to_exchange: to_exchange.to_string(),
             from_price: adjusted_from_price,
             to_price: adjusted_to_price,
+            from_volume_24h: from_vol,
+            to_volume_24h: to_vol,
+            from_notional_24h,
+            to_notional_24h,
             price_difference,
             profit_percentage,
             estimated_profit_after_fees,
@@ -192,23 +232,8 @@ impl ArbitrageService {
         include_fees: bool,
         limit: Option<i64>,
     ) -> Result<Vec<DirectionalArbitrage>> {
-        // 1) 심볼 목록 조회
-        let symbols: Vec<String> = if let Some(lim) = limit {
-            let rows = sqlx::query!(
-                "SELECT symbol FROM coins WHERE is_active = true ORDER BY symbol LIMIT ?",
-                lim
-            )
-            .fetch_all(&self.db)
-            .await?;
-            rows.into_iter().map(|r| r.symbol).collect()
-        } else {
-            let rows = sqlx::query!(
-                "SELECT symbol FROM coins WHERE is_active = true ORDER BY symbol"
-            )
-            .fetch_all(&self.db)
-            .await?;
-            rows.into_iter().map(|r| r.symbol).collect()
-        };
+        // 1) 두 거래소 모두에 상장된 심볼 목록 조회 (coin_listings 교집합)
+        let symbols: Vec<String> = self.get_common_symbols(from_exchange, to_exchange, limit).await?;
 
         // 2) 각 심볼에 대해 계산 (초기 버전: 순차 실행)
         let mut out: Vec<DirectionalArbitrage> = Vec::with_capacity(symbols.len());
@@ -226,6 +251,42 @@ impl ArbitrageService {
 
         // 3) 프리미엄 내림차순 정렬
         out.sort_by(|a, b| b.profit_percentage.cmp(&a.profit_percentage));
+        Ok(out)
+    }
+
+    async fn get_common_symbols(&self, from_exchange: &str, to_exchange: &str, limit: Option<i64>) -> Result<Vec<String>> {
+        let base_sql = r#"
+            SELECT c.symbol
+            FROM coin_listings cl1
+            JOIN exchanges e1 ON cl1.exchange_id = e1.id
+            JOIN coin_listings cl2 ON cl2.coin_id = cl1.coin_id
+            JOIN exchanges e2 ON cl2.exchange_id = e2.id
+            JOIN coins c ON c.id = cl1.coin_id
+            WHERE e1.name = ?
+              AND e2.name = ?
+              AND cl1.is_active = TRUE
+              AND cl2.is_active = TRUE
+            ORDER BY c.symbol
+        "#;
+        let rows = if let Some(lim) = limit {
+            sqlx::query(&format!("{} LIMIT ?", base_sql))
+                .bind(from_exchange)
+                .bind(to_exchange)
+                .bind(lim)
+                .fetch_all(&self.db)
+                .await?
+        } else {
+            sqlx::query(base_sql)
+                .bind(from_exchange)
+                .bind(to_exchange)
+                .fetch_all(&self.db)
+                .await?
+        };
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            let sym: String = row.try_get("symbol")?;
+            out.push(sym);
+        }
         Ok(out)
     }
 }
