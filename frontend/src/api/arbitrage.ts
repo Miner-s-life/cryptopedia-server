@@ -19,6 +19,28 @@ export interface DirectionalArbitrage {
   fx_rate: string;    // applied rate
 }
 
+export interface KimchiHistoryPoint {
+  ts: string;
+  from_price_krw: string;
+  to_price_krw: string;
+  profit_percentage: string;
+  from_notional_24h?: string | null;
+  to_notional_24h?: string | null;
+}
+
+export async function fetchKimchiHistory(params: {
+  symbol: string;
+  from: string;
+  to: string;
+  minutes?: number;
+}): Promise<KimchiHistoryPoint[]> {
+  const { symbol, from, to, minutes = 60 } = params;
+  const res = await api.get<KimchiHistoryPoint[]>(`/api/v1/kimchi/history`, {
+    params: { symbol, from, to, minutes },
+  });
+  return res.data;
+}
+
 export async function fetchArbitrageList(params: {
   from: string;
   to: string;

@@ -69,7 +69,26 @@ CREATE TABLE IF NOT EXISTS coin_listings (
     delisted_at DATETIME NULL,
     PRIMARY KEY (exchange_id, coin_id),
     KEY idx_market_symbol (market_symbol)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS kimchi_history (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    symbol VARCHAR(16) NOT NULL,
+    from_exchange VARCHAR(32) NOT NULL,
+    to_exchange VARCHAR(32) NOT NULL,
+    fx_type VARCHAR(16) NOT NULL,
+    ts DATETIME(6) NOT NULL,
+    from_price_krw DECIMAL(20,8) NOT NULL,
+    to_price_krw DECIMAL(20,8) NOT NULL,
+    profit_percentage DECIMAL(12,6) NOT NULL,
+    from_volume_24h DECIMAL(36,12) NULL,
+    to_volume_24h DECIMAL(36,12) NULL,
+    from_notional_24h DECIMAL(36,12) NULL,
+    to_notional_24h DECIMAL(36,12) NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    KEY idx_symbol_ts (symbol, ts),
+    KEY idx_pair_ts (from_exchange, to_exchange, ts)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Seed exchanges
 INSERT INTO exchanges (name, country, api_base_url) VALUES

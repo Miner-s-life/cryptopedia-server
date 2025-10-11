@@ -3,21 +3,24 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
-use crate::services::{ExchangeService, ExchangeRateService};
+use crate::services::{ExchangeService, ExchangeRateService, ArbitrageService};
+use crate::services::arbitrage_service::FxSource;
 
 pub struct SchedulerService {
     exchange_service: Arc<ExchangeService>,
     exchange_rate_service: Arc<ExchangeRateService>,
+    arbitrage_service: Arc<ArbitrageService>,
     scheduler: JobScheduler,
 }
 
 impl SchedulerService {
-    pub async fn new(exchange_service: Arc<ExchangeService>, exchange_rate_service: Arc<ExchangeRateService>) -> Result<Self> {
+    pub async fn new(exchange_service: Arc<ExchangeService>, exchange_rate_service: Arc<ExchangeRateService>, arbitrage_service: Arc<ArbitrageService>) -> Result<Self> {
         let scheduler = JobScheduler::new().await?;
         
         Ok(Self {
             exchange_service,
             exchange_rate_service,
+            arbitrage_service,
             scheduler,
         })
     }
@@ -51,9 +54,19 @@ impl SchedulerService {
             })
         })?;
 
+        // Every 1 minute: record ETH kimchi snapshot (Binance -> Upbit, usdkrw)
+        let arbitrage_service = Arc::clone(&self.arbitrage_service);
+        let kimchi_job = Job::new_async("0 * * * * *", move |_uuid, _l| {
+            let service = Arc::clone(&arbitrage_service);
+            Box::pin(async move {
+                let _ = service.record_kimchi_snapshot("ETH", "Binance", "Upbit", FxSource::UsdKrw).await;
+            })
+        })?;
+
         self.scheduler.add(price_collection_job).await?;
         self.scheduler.add(coin_sync_job).await?;
         self.scheduler.add(exchange_rate_job).await?;
+        self.scheduler.add(kimchi_job).await?;
 
         self.scheduler.start().await?;
         

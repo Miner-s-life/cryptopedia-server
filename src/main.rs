@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     let exchange_rate_service = Arc::new(ExchangeRateService::new(pool.clone(), exchange_rate_api_key.clone()));
     let arbitrage_service = Arc::new(ArbitrageService::new(pool.clone(), exchange_rate_api_key));
     
-    let mut scheduler = SchedulerService::new(Arc::clone(&exchange_service), Arc::clone(&exchange_rate_service)).await
+    let mut scheduler = SchedulerService::new(Arc::clone(&exchange_service), Arc::clone(&exchange_rate_service), Arc::clone(&arbitrage_service)).await
         .expect("Failed to create scheduler");
     
     scheduler.start().await.expect("Failed to start scheduler");
@@ -78,6 +78,7 @@ async fn main() -> Result<()> {
                 web::scope("/api/v1")
                     .route("/arbitrage", web::get().to(get_arbitrage_list))
                     .route("/arbitrage/{symbol}", web::get().to(get_directional_arbitrage))
+                    .route("/kimchi/history", web::get().to(get_kimchi_history))
                     .service(
                         web::scope("/admin")
                             .route("/sync-coins", web::post().to(sync_coins))

@@ -3,6 +3,7 @@ use log::{error, info};
 use serde::Deserialize;
 
 use crate::services::ArbitrageService;
+ 
 
 #[derive(Deserialize)]
 pub struct ArbitrageQuery {
@@ -11,6 +12,38 @@ pub struct ArbitrageQuery {
     // optional controls
     fx: Option<String>,     // usdkrw | usdtkrw
     fees: Option<String>,   // include | exclude
+}
+
+#[derive(Deserialize)]
+pub struct KimchiHistoryQuery {
+    symbol: String,
+    from: String,
+    to: String,
+    minutes: Option<i64>,
+}
+
+pub async fn get_kimchi_history(
+    query: web::Query<KimchiHistoryQuery>,
+    arbitrage_service: web::Data<ArbitrageService>,
+) -> Result<HttpResponse> {
+    let symbol = query.symbol.to_uppercase();
+    let from_exchange = normalize_exchange_name(&query.from);
+    let to_exchange = normalize_exchange_name(&query.to);
+    let minutes = query.minutes.unwrap_or(60);
+
+    match arbitrage_service
+        .get_kimchi_history(&symbol, &from_exchange, &to_exchange, minutes)
+        .await
+    {
+        Ok(points) => Ok(HttpResponse::Ok().json(points)),
+        Err(e) => {
+            error!(
+                "Failed to get kimchi history ({} -> {}, {}m): {}",
+                from_exchange, to_exchange, minutes, e
+            );
+            Ok(HttpResponse::InternalServerError().json(format!("Error: {}", e)))
+        }
+    }
 }
 
 #[derive(Deserialize)]

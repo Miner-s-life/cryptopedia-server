@@ -16,6 +16,16 @@ pub struct ArbitrageOpportunity {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct KimchiHistoryPoint {
+    pub ts: String,
+    pub from_price_krw: BigDecimal,
+    pub to_price_krw: BigDecimal,
+    pub profit_percentage: BigDecimal,
+    pub from_notional_24h: Option<BigDecimal>,
+    pub to_notional_24h: Option<BigDecimal>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DirectionalArbitrage {
     pub symbol: String,
     pub from_exchange: String,

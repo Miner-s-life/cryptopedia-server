@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchArbitrageList, DirectionalArbitrage } from './api/arbitrage';
+import { fetchArbitrageList, DirectionalArbitrage, fetchKimchiHistory, KimchiHistoryPoint } from './api/arbitrage';
 
 const EXCHANGES = ['Binance', 'Upbit', 'Bithumb'] as const;
 type FxType = 'usdtkrw' | 'usdkrw';
@@ -13,6 +13,9 @@ export default function App() {
   const [err, setErr] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const firstLoaded = useRef<boolean>(false);
+  const [hist, setHist] = useState<KimchiHistoryPoint[]>([]);
+  const [rangeMin, setRangeMin] = useState<number>(60);
+  const [showAll, setShowAll] = useState<boolean>(false);
 
   const fmtNumber = (val: string | number, digits = 2) => {
     const n = typeof val === 'number' ? val : parseFloat(String(val));
@@ -55,13 +58,130 @@ export default function App() {
     } finally { setLoading(false); }
   };
 
-  // polling every 2s; refresh when controls change
   useEffect(() => {
     fetchData();
     const id = setInterval(fetchData, 2000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromEx, toEx, fx]);
+
+  useEffect(() => {
+    fetchKimchiHistory({ symbol: 'ETH', from: fromEx, to: toEx, minutes: rangeMin })
+      .then(setHist)
+      .catch(() => setHist([]));
+  }, [fromEx, toEx, rangeMin]);
+
+  const Chart = () => {
+    const w = 720; // inner view width
+    const h = 200;
+    const padL = 44; // left for y-axis labels
+    const padB = 22; // bottom for x-axis labels
+    if (hist.length === 0) return <div className="card" style={{padding:12, marginBottom:12}}>히스토리 없음</div>;
+    const pts = hist.map(p => ({
+      ts: p.ts,
+      x: new Date(p.ts).getTime(),
+      y: parseFloat(p.profit_percentage),
+      fp: parseFloat(p.from_price_krw),
+      tp: parseFloat(p.to_price_krw),
+      fn: p.from_notional_24h ? parseFloat(String(p.from_notional_24h)) : NaN,
+      tn: p.to_notional_24h ? parseFloat(String(p.to_notional_24h)) : NaN,
+    }));
+    const minX = Math.min(...pts.map(p=>p.x));
+    const maxX = Math.max(...pts.map(p=>p.x));
+    // y-domain: include zero and add padding
+    let minY = Math.min(0, ...pts.map(p=>p.y));
+    let maxY = Math.max(0, ...pts.map(p=>p.y));
+    const span = Math.max(1e-6, maxY - minY);
+    minY -= span * 0.08;
+    maxY += span * 0.08;
+    const sx = (x:number) => padL + (w - padL - 10) * ((x - minX) / Math.max(1, (maxX - minX)));
+    const sy = (y:number) => (h - padB) - (h - padB - 10) * ((y - minY) / Math.max(1e-9, (maxY - minY)));
+    const d = pts.map((p,i)=> `${i===0? 'M':'L'}${sx(p.x)},${sy(p.y)}`).join(' ');
+    const [hoverX, setHoverX] = useState<number | null>(null);
+    const nearest = (() => {
+      if (hoverX == null) return null;
+      let best = 0, bestDist = Number.MAX_VALUE;
+      for (let i=0;i<pts.length;i++) { const dx = Math.abs(sx(pts[i].x) - hoverX); if (dx < bestDist) { bestDist = dx; best = i; } }
+      return pts[best];
+    })();
+    const xTicks = 4;
+    const yTicks = 4;
+    const yTickVals = Array.from({length:yTicks+1}, (_,i)=> minY + (i*(maxY-minY)/yTicks));
+    const fmtTime = (t:number) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return (
+      <div className="card" style={{padding:12, marginBottom:12, position:'relative'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <div style={{fontWeight:700}}>ETH 김프 추이</div>
+          <select className="select" value={rangeMin} onChange={e=>setRangeMin(parseInt(e.target.value,10))}>
+            <option value={60}>60분</option>
+            <option value={360}>6시간</option>
+            <option value={1440}>24시간</option>
+          </select>
+        </div>
+        <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`}
+             onMouseMove={e=>{
+               const svg = e.currentTarget as SVGSVGElement;
+               const ctm = svg.getScreenCTM();
+               if (!ctm) return;
+               const pt = svg.createSVGPoint();
+               pt.x = e.clientX;
+               pt.y = e.clientY;
+               const loc = pt.matrixTransform(ctm.inverse());
+               const clampedX = Math.max(padL, Math.min(w - 10, loc.x));
+               setHoverX(clampedX);
+             }}
+             onMouseLeave={()=>setHoverX(null)}>
+          {/* Axes */}
+          <line x1={padL} y1={10} x2={padL} y2={h-padB} stroke="#e5e7eb" />
+          <line x1={padL} y1={h-padB} x2={w-10} y2={h-padB} stroke="#e5e7eb" />
+          {/* Y grid & ticks */}
+          {yTickVals.map((v,i)=>{
+            const y = sy(v);
+            const isZero = Math.abs(v) < 1e-9;
+            return (
+              <g key={i}>
+                <line x1={padL} y1={y} x2={w-10} y2={y} stroke={isZero? '#d1d5db' : '#eef2f7'} strokeDasharray={isZero? '': '3 3'} />
+                <text x={padL-8} y={y+4} fontSize="10" textAnchor="end" fill="#6b7280">{v.toFixed(2)}%</text>
+              </g>
+            );
+          })}
+          {/* X ticks */}
+          {Array.from({length:xTicks+1}, (_,i)=>{
+            const t = minX + (i*(maxX-minX)/xTicks);
+            const x = sx(t);
+            return (
+              <text key={i} x={x} y={h-6} fontSize="10" textAnchor="middle" fill="#6b7280">{fmtTime(t)}</text>
+            );
+          })}
+          {/* Area fill under line */}
+          <defs>
+            <linearGradient id="kpFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <path d={`${d} L ${sx(pts[pts.length-1].x)},${sy(0)} L ${sx(pts[0].x)},${sy(0)} Z`} fill="url(#kpFill)" opacity="0.8" />
+          {/* Line */}
+          <path d={d} fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          {/* Hover */}
+          {hoverX != null && (
+            <g>
+              <line x1={hoverX} y1={10} x2={hoverX} y2={h-padB} stroke="#374151" strokeDasharray="4 4" />
+              {nearest && <circle cx={sx(nearest.x)} cy={sy(nearest.y)} r="3" fill="#4f46e5" />}
+            </g>
+          )}
+        </svg>
+        {hoverX != null && nearest && (
+          <div style={{position:'absolute', left: Math.min(w-200, Math.max(padL, hoverX+8)), top: 32, background:'var(--card)', border:'1px solid var(--border)', borderRadius:6, padding:'8px 10px', fontSize:12, boxShadow:'0 4px 12px rgba(0,0,0,0.12)'}}>
+            <div style={{fontWeight:700, marginBottom:4}}>{new Date(nearest.x).toLocaleString()}</div>
+            <div>김프: <span className="num">{nearest.y.toFixed(2)}%</span></div>
+            <div>From: <span className="num">₩ {fmtNumber(nearest.fp, 0)}</span></div>
+            <div>To: <span className="num">₩ {fmtNumber(nearest.tp, 0)}</span></div>
+            <div>거래대금 합: <span className="num">₩ {fmtNumber((isFinite(nearest.fn)?nearest.fn:0)+(isFinite(nearest.tn)?nearest.tn:0), 0)}</span></div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="app">
@@ -115,6 +235,8 @@ export default function App() {
             </div>
           </div>
 
+          <Chart />
+
           <div className="card table-wrap">
             <table className="table">
               <thead>
@@ -132,7 +254,7 @@ export default function App() {
                     <td colSpan={4} style={{color:'var(--muted)',padding:'18px'}}>데이터 준비 중...</td>
                   </tr>
                 )}
-                {rows.map((data)=> {
+                {(showAll ? rows : rows.slice(0, 15)).map((data)=> {
                   const fn = data.from_notional_24h ? parseFloat(String(data.from_notional_24h)) : NaN;
                   const tn = data.to_notional_24h ? parseFloat(String(data.to_notional_24h)) : NaN;
                   const sum = (isFinite(fn)?fn:0) + (isFinite(tn)?tn:0);
@@ -151,6 +273,16 @@ export default function App() {
                 )})}
               </tbody>
             </table>
+            {!showAll && rows.length > 15 && (
+              <div style={{display:'flex', justifyContent:'center', padding:'12px'}}>
+                <button className="btn" onClick={()=>setShowAll(true)}>더보기</button>
+              </div>
+            )}
+            {showAll && rows.length > 15 && (
+              <div style={{display:'flex', justifyContent:'center', padding:'12px'}}>
+                <button className="btn" onClick={()=>setShowAll(false)}>접기</button>
+              </div>
+            )}
           </div>
 
           {err && <div style={{ color: 'var(--danger)', marginTop: 12 }}>{String(err)}</div>}

@@ -1,10 +1,12 @@
 use anyhow::Result;
 use bigdecimal::BigDecimal;
 use sqlx::{MySqlPool, Row};
+use chrono::Utc;
 use std::str::FromStr;
 
 use crate::models::DirectionalArbitrage;
 use crate::services::ExchangeRateService;
+use crate::models::KimchiHistoryPoint;
 
 #[derive(Clone)]
 pub struct ArbitrageService {
@@ -96,6 +98,73 @@ impl ArbitrageService {
             let price: BigDecimal = row.try_get("price")?;
             let volume: Option<BigDecimal> = row.try_get("volume_24h")?;
             out.push((name, price, volume));
+        }
+        Ok(out)
+    }
+
+    pub async fn record_kimchi_snapshot(&self, symbol: &str, from_exchange: &str, to_exchange: &str, fx_source: FxSource) -> Result<()> {
+        let ar = self.get_directional_arbitrage_with_options(symbol, from_exchange, to_exchange, fx_source, false).await?;
+        let ts = Utc::now().naive_utc();
+        sqlx::query!(
+            r#"
+            INSERT INTO kimchi_history (
+              symbol, from_exchange, to_exchange, fx_type, ts,
+              from_price_krw, to_price_krw, profit_percentage,
+              from_volume_24h, to_volume_24h, from_notional_24h, to_notional_24h
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+            ar.symbol,
+            ar.from_exchange,
+            ar.to_exchange,
+            ar.fx_type,
+            ts,
+            ar.from_price,
+            ar.to_price,
+            ar.profit_percentage,
+            ar.from_volume_24h,
+            ar.to_volume_24h,
+            ar.from_notional_24h,
+            ar.to_notional_24h
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_kimchi_history(&self, symbol: &str, from_exchange: &str, to_exchange: &str, minutes: i64) -> Result<Vec<KimchiHistoryPoint>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT ts, from_price_krw, to_price_krw, profit_percentage,
+                   from_notional_24h, to_notional_24h
+            FROM kimchi_history
+            WHERE symbol = ? AND from_exchange = ? AND to_exchange = ?
+              AND ts >= NOW() - INTERVAL ? MINUTE
+            ORDER BY ts ASC
+            "#
+        )
+        .bind(symbol)
+        .bind(from_exchange)
+        .bind(to_exchange)
+        .bind(minutes)
+        .fetch_all(&self.db)
+        .await?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            let ts: chrono::NaiveDateTime = row.try_get("ts")?;
+            let from_price: BigDecimal = row.try_get("from_price_krw")?;
+            let to_price: BigDecimal = row.try_get("to_price_krw")?;
+            let pct: BigDecimal = row.try_get("profit_percentage")?;
+            let from_notional: Option<BigDecimal> = row.try_get("from_notional_24h")?;
+            let to_notional: Option<BigDecimal> = row.try_get("to_notional_24h")?;
+            out.push(KimchiHistoryPoint {
+                ts: chrono::DateTime::<Utc>::from_naive_utc_and_offset(ts, Utc).to_rfc3339(),
+                from_price_krw: from_price,
+                to_price_krw: to_price,
+                profit_percentage: pct,
+                from_notional_24h: from_notional,
+                to_notional_24h: to_notional,
+            });
         }
         Ok(out)
     }
