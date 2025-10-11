@@ -27,17 +27,13 @@ CREATE TABLE IF NOT EXISTS price_data (
   exchange_id INT NOT NULL,
   coin_id INT NOT NULL,
   price DECIMAL(20,8) NOT NULL,
-  volume_24h DECIMAL(20,8) NULL,
+  volume_24h DECIMAL(36,12) NULL,
   price_change_24h DECIMAL(10,4) NULL,
   timestamp DATETIME(6) NOT NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   UNIQUE KEY uniq_exchange_coin_ts (exchange_id, coin_id, timestamp),
   KEY idx_price_data_exchange_coin_time (exchange_id, coin_id, timestamp),
-  KEY idx_price_data_timestamp (timestamp),
-  CONSTRAINT fk_price_data_exchange FOREIGN KEY (exchange_id) REFERENCES exchanges(id)
-    ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT fk_price_data_coin FOREIGN KEY (coin_id) REFERENCES coins(id)
-    ON DELETE RESTRICT ON UPDATE CASCADE
+  KEY idx_price_data_timestamp (timestamp)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Exchange rates
@@ -59,12 +55,21 @@ CREATE TABLE IF NOT EXISTS exchange_fees (
   trading_fee DECIMAL(6,4) NOT NULL,
   withdrawal_fee DECIMAL(20,8) NOT NULL,
   updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  KEY idx_fees_exchange_coin (exchange_id, coin_id),
-  CONSTRAINT fk_fees_exchange FOREIGN KEY (exchange_id) REFERENCES exchanges(id)
-    ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT fk_fees_coin FOREIGN KEY (coin_id) REFERENCES coins(id)
-    ON DELETE RESTRICT ON UPDATE CASCADE
+  KEY idx_fees_exchange_coin (exchange_id, coin_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS coin_listings (
+    exchange_id INT NOT NULL,
+    coin_id INT NOT NULL,
+    market_symbol VARCHAR(64) NOT NULL,
+    base VARCHAR(32) NULL,
+    quote VARCHAR(32) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    listed_at DATETIME NULL,
+    delisted_at DATETIME NULL,
+    PRIMARY KEY (exchange_id, coin_id),
+    KEY idx_market_symbol (market_symbol)
+);
 
 -- Seed exchanges
 INSERT INTO exchanges (name, country, api_base_url) VALUES

@@ -80,17 +80,4 @@ pub struct UpbitTickerResponse {
     pub signed_change_rate: f64,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct BithumbTickerResponse {
-    pub status: String,
-    pub data: BithumbTickerData,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BithumbTickerData {
-    pub closing_price: String,
-    #[serde(rename = "units_traded_24H")]
-    pub units_traded_24h: String,
-    #[serde(rename = "fluctate_rate_24H")]
-    pub fluctate_rate_24h: String,
-}
+// Bithumb single-symbol response structs removed: we now parse ALL_KRW via a local struct in service

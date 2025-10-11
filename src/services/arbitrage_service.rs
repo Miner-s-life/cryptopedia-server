@@ -71,10 +71,6 @@ impl ArbitrageService {
         Ok(prices)
     }
 
-    pub async fn get_directional_arbitrage(&self, symbol: &str, from_exchange: &str, to_exchange: &str) -> Result<DirectionalArbitrage> {
-        self.get_directional_arbitrage_with_options(symbol, from_exchange, to_exchange, FxSource::UsdtKrw, true).await
-    }
-
     pub async fn get_directional_arbitrage_with_options(
         &self,
         symbol: &str,

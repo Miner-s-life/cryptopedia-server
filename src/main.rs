@@ -78,6 +78,11 @@ async fn main() -> Result<()> {
                 web::scope("/api/v1")
                     .route("/arbitrage", web::get().to(get_arbitrage_list))
                     .route("/arbitrage/{symbol}", web::get().to(get_directional_arbitrage))
+                    .service(
+                        web::scope("/admin")
+                            .route("/sync-coins", web::post().to(sync_coins))
+                            .route("/ingest-now", web::post().to(ingest_now))
+                    )
             )
     })
     .bind(&server_address)?
