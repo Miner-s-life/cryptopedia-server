@@ -102,6 +102,55 @@ impl ArbitrageService {
         Ok(out)
     }
 
+    // Batch latest price/volume for many symbols and two exchanges by id, using GROUP BY + JOIN
+    async fn get_latest_price_volume_for_multi(&self, symbols: &[String], exchange_ids: &[i32]) -> Result<Vec<(String, i32, BigDecimal, Option<BigDecimal>)>> {
+        use sqlx::QueryBuilder;
+        let mut qb = QueryBuilder::new(
+            r#"
+            SELECT c.symbol AS symbol,
+                   e.id     AS exchange_id,
+                   pd.price AS price,
+                   pd.volume_24h AS volume_24h
+            FROM (
+                SELECT pd.exchange_id, pd.coin_id, MAX(pd.timestamp) AS ts
+                FROM price_data pd
+                JOIN coins c ON c.id = pd.coin_id
+                WHERE c.symbol IN (
+            "#);
+        {
+            let mut sep = qb.separated(", ");
+            for s in symbols { sep.push_bind(s); }
+        }
+        qb.push(") AND pd.exchange_id IN (");
+        {
+            let mut sep = qb.separated(", ");
+            for ex in exchange_ids { sep.push_bind(*ex); }
+        }
+        qb.push(
+            ") AND pd.timestamp >= NOW() - INTERVAL 30 MINUTE
+                GROUP BY pd.exchange_id, pd.coin_id
+            ) latest
+            JOIN price_data pd
+              ON pd.exchange_id = latest.exchange_id
+             AND pd.coin_id = latest.coin_id
+             AND pd.timestamp = latest.ts
+            JOIN coins c ON c.id = pd.coin_id
+            JOIN exchanges e ON e.id = pd.exchange_id
+            "
+        );
+
+        let rows = qb.build().fetch_all(&self.db).await?;
+        let mut out: Vec<(String, i32, BigDecimal, Option<BigDecimal>)> = Vec::with_capacity(rows.len());
+        for row in rows {
+            let symbol: String = row.try_get("symbol")?;
+            let ex_id: i32 = row.try_get("exchange_id")?;
+            let price: BigDecimal = row.try_get("price")?;
+            let volume: Option<BigDecimal> = row.try_get("volume_24h")?;
+            out.push((symbol, ex_id, price, volume));
+        }
+        Ok(out)
+    }
+
     pub async fn record_kimchi_snapshot(&self, symbol: &str, from_exchange: &str, to_exchange: &str, fx_source: FxSource) -> Result<()> {
         let ar = self.get_directional_arbitrage_with_options(symbol, from_exchange, to_exchange, fx_source, false).await?;
         let ts = Utc::now().naive_utc();
@@ -304,21 +353,64 @@ impl ArbitrageService {
         // 1) 두 거래소 모두에 상장된 심볼 목록 조회 (coin_listings 교집합)
         let symbols: Vec<String> = self.get_common_symbols(from_exchange, to_exchange, limit).await?;
 
-        // 2) 각 심볼에 대해 계산 (초기 버전: 순차 실행)
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // 2) 두 거래소(from/to) id를 조회하고, 모든 심볼의 최신 price/volume을 한 번에 조회
+        let from_id = self.get_exchange_id_by_name(from_exchange).await?;
+        let to_id = self.get_exchange_id_by_name(to_exchange).await?;
+        let rows = self.get_latest_price_volume_for_multi(&symbols, &[from_id, to_id]).await?;
+        // rows: Vec<(symbol, exchange_name, price, volume_opt)>
+        use std::collections::HashMap;
+        let mut pv_map: HashMap<(String, i32), (BigDecimal, Option<BigDecimal>)> = HashMap::with_capacity(rows.len());
+        for (sym, ex_id, price, vol) in rows {
+            pv_map.insert((sym, ex_id), (price, vol));
+        }
+
+        // 3) 각 심볼 계산 (맵 조회로 O(1))
         let mut out: Vec<DirectionalArbitrage> = Vec::with_capacity(symbols.len());
         for sym in symbols {
-            match self
-                .get_directional_arbitrage_with_options(&sym, from_exchange, to_exchange, fx_source, include_fees)
-                .await
-            {
-                Ok(item) => out.push(item),
-                Err(_) => {
-                    // 개별 실패는 건너뜀
-                }
+            let from_pair = pv_map.get(&(sym.clone(), from_id));
+            let to_pair = pv_map.get(&(sym.clone(), to_id));
+            if let (Some((from_price, from_vol)), Some((to_price, to_vol))) = (from_pair, to_pair) {
+                // adjust to KRW if needed
+                let (adjusted_from_price, adjusted_to_price, fx_rate, fx_type) = self
+                    .adjust_prices_for_currency(from_price, to_price, from_exchange, to_exchange, &fx_source)
+                    .await?;
+
+                let price_difference = &adjusted_to_price - &adjusted_from_price;
+                let profit_percentage = (&price_difference / &adjusted_from_price) * BigDecimal::from(100);
+                let total_fees = if include_fees {
+                    self.calculate_total_fees(&sym, from_exchange, to_exchange).await?
+                } else { BigDecimal::from(0) };
+                let estimated_profit_after_fees = &profit_percentage - &total_fees;
+                let is_profitable = estimated_profit_after_fees > BigDecimal::from(0);
+                let from_notional_24h = from_vol.as_ref().map(|v| &adjusted_from_price * v);
+                let to_notional_24h = to_vol.as_ref().map(|v| &adjusted_to_price * v);
+
+                out.push(DirectionalArbitrage {
+                    symbol: sym.clone(),
+                    from_exchange: from_exchange.to_string(),
+                    to_exchange: to_exchange.to_string(),
+                    from_price: adjusted_from_price,
+                    to_price: adjusted_to_price,
+                    from_volume_24h: from_vol.clone(),
+                    to_volume_24h: to_vol.clone(),
+                    from_notional_24h,
+                    to_notional_24h,
+                    price_difference,
+                    profit_percentage,
+                    estimated_profit_after_fees,
+                    total_fees,
+                    is_profitable,
+                    fx_type,
+                    fx_rate,
+                });
             }
         }
 
-        // 3) 프리미엄 내림차순 정렬
+        // 4) 프리미엄 내림차순 정렬
         out.sort_by(|a, b| b.profit_percentage.cmp(&a.profit_percentage));
         Ok(out)
     }
@@ -357,5 +449,12 @@ impl ArbitrageService {
             out.push(sym);
         }
         Ok(out)
+    }
+
+    async fn get_exchange_id_by_name(&self, name: &str) -> Result<i32> {
+        let row = sqlx::query!("SELECT id FROM exchanges WHERE name = ?", name)
+            .fetch_one(&self.db)
+            .await?;
+        Ok(row.id)
     }
 }
