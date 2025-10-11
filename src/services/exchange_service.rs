@@ -3,7 +3,7 @@ use bigdecimal::{BigDecimal, FromPrimitive};
 use chrono::Utc;
 use log::{error, info};
 use reqwest::Client;
-use sqlx::PgPool;
+use sqlx::MySqlPool;
 use std::str::FromStr;
 
 use crate::models::{
@@ -13,11 +13,11 @@ use crate::models::{
 #[derive(Clone)]
 pub struct ExchangeService {
     client: Client,
-    db: PgPool,
+    db: MySqlPool,
 }
 
 impl ExchangeService {
-    pub fn new(db: PgPool) -> Self {
+    pub fn new(db: MySqlPool) -> Self {
         Self {
             client: Client::new(),
             db,
@@ -184,7 +184,7 @@ impl ExchangeService {
 
     async fn get_coin_id(&self, symbol: &str) -> Result<Option<i32>> {
         let result = sqlx::query!(
-            "SELECT id FROM coins WHERE symbol = $1 AND is_active = true",
+            "SELECT id FROM coins WHERE symbol = ? AND is_active = true",
             symbol
         )
         .fetch_optional(&self.db)
@@ -209,11 +209,11 @@ impl ExchangeService {
             sqlx::query!(
                 r#"
                 INSERT INTO price_data (exchange_id, coin_id, price, volume_24h, price_change_24h, timestamp)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (exchange_id, coin_id, timestamp) DO UPDATE SET
-                    price = EXCLUDED.price,
-                    volume_24h = EXCLUDED.volume_24h,
-                    price_change_24h = EXCLUDED.price_change_24h
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    price = VALUES(price),
+                    volume_24h = VALUES(volume_24h),
+                    price_change_24h = VALUES(price_change_24h)
                 "#,
                 price.exchange_id,
                 price.coin_id,

@@ -1,17 +1,18 @@
 services:
-  postgres:
-    image: postgres:15
-    container_name: cryptopedia_db
+  mysql:
+    image: mysql:8.0
+    container_name: cryptopedia_mysql
     environment:
-      POSTGRES_DB: cryptopedia
-      POSTGRES_USER: cryptopedia_user
-      POSTGRES_PASSWORD: cryptopedia_password
-      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+      MYSQL_DATABASE: cryptopedia
+      MYSQL_USER: cryptopedia_user
+      MYSQL_PASSWORD: cryptopedia_password
+      MYSQL_ROOT_PASSWORD: rootpassword
     ports:
-      - "5432:5432"
+      - "3306:3306"
+    command: ["--default-authentication-plugin=mysql_native_password", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci", "--max-connections=300"]
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql
+      - mysql_data:/var/lib/mysql
+      - ./migrations/mysql/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql
     networks:
       - cryptopedia_network
 
@@ -30,7 +31,7 @@ services:
   #     - cryptopedia_network
 
 volumes:
-  postgres_data:
+  mysql_data:
 
 networks:
   cryptopedia_network:

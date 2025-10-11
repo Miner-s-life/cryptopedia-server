@@ -18,12 +18,12 @@ fi
 
 echo "Starting with environment: $ENVIRONMENT"
 
-if ! docker ps | grep -q cryptopedia_db; then
-    docker-compose up -d postgres
+if ! docker ps | grep -q cryptopedia_mysql; then
+    docker-compose up -d mysql
     sleep 10
 fi
 
-docker exec -e PGPASSWORD=cryptopedia_password cryptopedia_db psql -U cryptopedia_user -d cryptopedia -c "SELECT 1;" > /dev/null 2>&1
+docker exec cryptopedia_mysql sh -c "mysql -ucryptopedia_user -pcryptopedia_password -D cryptopedia -e 'SELECT 1;'" > /dev/null 2>&1
 
 if [ $? -ne 0 ]; then
     echo "Database connection failed. Run setup.sh first."

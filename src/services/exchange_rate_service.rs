@@ -3,18 +3,18 @@ use crate::utils::error::AppError;
 use bigdecimal::BigDecimal;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, REFERER, USER_AGENT};
 use reqwest::Client;
-use sqlx::PgPool;
+use sqlx::MySqlPool;
 use std::str::FromStr;
 
 #[derive(Clone)]
 pub struct ExchangeRateService {
     client: Client,
-    pool: PgPool,
+    pool: MySqlPool,
     auth_key: String,
 }
 
 impl ExchangeRateService {
-    pub fn new(pool: PgPool, auth_key: String) -> Self {
+    pub fn new(pool: MySqlPool, auth_key: String) -> Self {
         Self {
             client: Client::new(),
             pool,
@@ -73,9 +73,9 @@ impl ExchangeRateService {
 
     pub async fn get_latest_usd_krw_rate(&self) -> Result<BigDecimal, AppError> {
         let rate = sqlx::query!(
-            "SELECT rate FROM exchange_rates 
-             WHERE currency_code = 'USD' 
-             ORDER BY created_at DESC 
+            "SELECT rate FROM exchange_rates \
+             WHERE currency_code = 'USD' \
+             ORDER BY created_at DESC \
              LIMIT 1"
         )
         .fetch_optional(&self.pool)
@@ -92,7 +92,7 @@ impl ExchangeRateService {
 
     pub async fn save_exchange_rate(&self, new_rate: &NewExchangeRate) -> Result<(), AppError> {
         sqlx::query!(
-            "INSERT INTO exchange_rates (currency_code, rate, ttb_rate, tts_rate, created_at) VALUES ($1, $2, $3, $4, NOW())",
+            "INSERT INTO exchange_rates (currency_code, rate, ttb_rate, tts_rate, created_at) VALUES (?, ?, ?, ?, NOW())",
             new_rate.currency_code,
             new_rate.rate,
             new_rate.ttb_rate,

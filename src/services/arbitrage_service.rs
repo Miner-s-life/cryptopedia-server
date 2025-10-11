@@ -1,6 +1,6 @@
 use anyhow::Result;
 use bigdecimal::BigDecimal;
-use sqlx::PgPool;
+use sqlx::{MySqlPool, Row};
 use std::str::FromStr;
 
 use crate::models::DirectionalArbitrage;
@@ -8,7 +8,7 @@ use crate::services::ExchangeRateService;
 
 #[derive(Clone)]
 pub struct ArbitrageService {
-    db: PgPool,
+    db: MySqlPool,
     exchange_rate_service: ExchangeRateService,
 }
 
@@ -19,7 +19,7 @@ pub enum FxSource {
 }
 
 impl ArbitrageService {
-    pub fn new(db: PgPool, auth_key: String) -> Self {
+    pub fn new(db: MySqlPool, auth_key: String) -> Self {
         let exchange_rate_service = ExchangeRateService::new(db.clone(), auth_key);
         Self { 
             db,
@@ -44,26 +44,30 @@ impl ArbitrageService {
     }
 
     async fn get_latest_prices_for_symbol(&self, symbol: &str) -> Result<Vec<(String, BigDecimal)>> {
-        let results = sqlx::query!(
+        let rows = sqlx::query(
             r#"
-            SELECT DISTINCT ON (e.name) e.name, pd.price
-            FROM price_data pd
-            JOIN exchanges e ON pd.exchange_id = e.id
-            JOIN coins c ON pd.coin_id = c.id
-            WHERE c.symbol = $1
-            AND pd.timestamp >= NOW() - INTERVAL '30 minutes'
-            ORDER BY e.name, pd.timestamp DESC
-            "#,
-            symbol
+            SELECT name, price FROM (
+              SELECT e.name AS name, pd.price,
+                     ROW_NUMBER() OVER (PARTITION BY e.name ORDER BY pd.timestamp DESC) AS rn
+              FROM price_data pd
+              JOIN exchanges e ON pd.exchange_id = e.id
+              JOIN coins c ON pd.coin_id = c.id
+              WHERE c.symbol = ?
+                AND pd.timestamp >= NOW() - INTERVAL 30 MINUTE
+            ) t
+            WHERE rn = 1
+            "#
         )
+        .bind(symbol)
         .fetch_all(&self.db)
         .await?;
 
-        let prices: Vec<(String, BigDecimal)> = results
-            .into_iter()
-            .map(|row| (row.name, row.price))
-            .collect();
-
+        let mut prices: Vec<(String, BigDecimal)> = Vec::with_capacity(rows.len());
+        for row in rows {
+            let name: String = row.try_get("name")?;
+            let price: BigDecimal = row.try_get("price")?;
+            prices.push((name, price));
+        }
         Ok(prices)
     }
 

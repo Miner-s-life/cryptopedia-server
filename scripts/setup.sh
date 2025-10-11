@@ -17,25 +17,25 @@ if ! command -v cargo &> /dev/null; then
     exit 1
 fi
 
-docker-compose up -d postgres
-sleep 7
-docker exec -e PGPASSWORD=cryptopedia_password cryptopedia_db psql -U cryptopedia_user -d cryptopedia -c "SELECT 1;" > /dev/null 2>&1
+docker-compose up -d mysql
+sleep 10
+docker exec cryptopedia_mysql sh -c "mysql -uroot -prootpassword -e 'SELECT 1;'" > /dev/null 2>&1
 
 if [ $? -ne 0 ]; then
     echo "Database connection failed."
     exit 1
 fi
 
-docker exec -e PGPASSWORD=cryptopedia_password cryptopedia_db psql -U cryptopedia_user -d cryptopedia -f /docker-entrypoint-initdb.d/001_initial_schema.sql > /dev/null 2>&1
+docker exec cryptopedia_mysql sh -c "mysql -uroot -prootpassword -D cryptopedia -e 'SHOW TABLES;'" > /dev/null 2>&1
 
 if [ $? -ne 0 ]; then
     echo "Migration failed."
     exit 1
 fi
 
-TABLE_COUNT=$(docker exec -e PGPASSWORD=cryptopedia_password cryptopedia_db psql -U cryptopedia_user -d cryptopedia -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d ' \n\r')
+TABLE_COUNT=$(docker exec cryptopedia_mysql sh -c "mysql -uroot -prootpassword -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='cryptopedia';\"" | tr -d ' \n\r')
 
-if [ "$TABLE_COUNT" -le 0 ] 2>/dev/null; then
+if [ -z "$TABLE_COUNT" ] || [ "$TABLE_COUNT" -le 0 ] 2>/dev/null; then
     echo "Table creation failed."
     exit 1
 fi
