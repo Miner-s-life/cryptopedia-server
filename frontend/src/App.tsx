@@ -16,6 +16,18 @@ export default function App() {
   const [hist, setHist] = useState<KimchiHistoryPoint[]>([]);
   const [rangeMin, setRangeMin] = useState<number>(60);
   const [showAll, setShowAll] = useState<boolean>(false);
+  const [priceTip, setPriceTip] = useState<{x:number,y:number,text:string}|null>(null);
+
+  const fmtKrwCompact = (val: number) => {
+    if (!isFinite(val)) return '';
+    const abs = Math.abs(val);
+    if (abs >= 1e12) return `${(val/1e12).toFixed(2)}조`;
+    if (abs >= 1e8) return `${(val/1e8).toFixed(2)}억`;
+    return '';
+  };
+
+  const getIconUrl = (symbol: string) =>
+    `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@latest/svg/color/${symbol.toLowerCase()}.svg`;
 
   const fmtNumber = (val: string | number, digits = 2) => {
     const n = typeof val === 'number' ? val : parseFloat(String(val));
@@ -234,7 +246,11 @@ export default function App() {
               </div>
             </div>
           </div>
-
+          {priceTip && (
+            <div style={{position:'fixed', left: priceTip.x, top: priceTip.y, background:'var(--card)', border:'1px solid var(--border)', borderRadius:6, padding:'6px 8px', fontSize:12, boxShadow:'0 4px 12px rgba(0,0,0,0.12)', pointerEvents:'none'}}>
+              {priceTip.text}
+            </div>
+          )}
           <Chart />
 
           <div className="card table-wrap">
@@ -258,17 +274,62 @@ export default function App() {
                   const fn = data.from_notional_24h ? parseFloat(String(data.from_notional_24h)) : NaN;
                   const tn = data.to_notional_24h ? parseFloat(String(data.to_notional_24h)) : NaN;
                   const sum = (isFinite(fn)?fn:0) + (isFinite(tn)?tn:0);
+                  const sumCompact = fmtKrwCompact(sum);
+                  const fx = parseFloat(String(data.fx_rate));
+                  const fromIsBinance = data.from_exchange === 'Binance';
+                  const toIsBinance = data.to_exchange === 'Binance';
+                  const fromQuoteCcy = (data.fx_type === 'usdtkrw') ? 'USDT' : 'USD';
+                  const toQuoteCcy = (data.fx_type === 'usdtkrw') ? 'USDT' : 'USD';
+                  const fromQuote = fromIsBinance && isFinite(fx) && fx !== 0 ? (parseFloat(String(data.from_price)) / fx) : null;
+                  const toQuote = toIsBinance && isFinite(fx) && fx !== 0 ? (parseFloat(String(data.to_price)) / fx) : null;
                   return (
                   <tr key={`${data.symbol}-${data.from_exchange}-${data.to_exchange}`}>
-                    <td style={{fontWeight:700}}>{data.symbol}</td>
-                    <td><span className="num price">{fmtNumber(data.from_price, 2)}</span></td>
-                    <td><span className="num price">{fmtNumber(data.to_price, 2)}</span></td>
+                    <td>
+                      <div className="coin">
+                        <img
+                          src={getIconUrl(data.symbol)}
+                          alt={data.symbol}
+                          onError={(e)=>{
+                            const img = e.currentTarget as HTMLImageElement;
+                            const tried = img.getAttribute('data-fallback');
+                            if (!tried) {
+                              img.setAttribute('data-fallback','png');
+                              img.src = `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@latest/png/color/${data.symbol.toLowerCase()}.png`;
+                            } else {
+                              img.style.display='none';
+                            }
+                          }}
+                        />
+                        <span style={{fontWeight:700}}>{data.symbol}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        className="num price"
+                        onMouseMove={e=>{
+                          if (fromQuote != null) setPriceTip({ x: e.clientX+12, y: e.clientY+12, text: `≈ ${fmtNumber(fromQuote, 4)} ${fromQuoteCcy}`});
+                        }}
+                        onMouseLeave={()=> setPriceTip(null)}
+                      >{fmtNumber(data.from_price, 2)}</span> <span className="unit">KRW</span>
+                    </td>
+                    <td>
+                      <span
+                        className="num price"
+                        onMouseMove={e=>{
+                          if (toQuote != null) setPriceTip({ x: e.clientX+12, y: e.clientY+12, text: `≈ ${fmtNumber(toQuote, 4)} ${toQuoteCcy}`});
+                        }}
+                        onMouseLeave={()=> setPriceTip(null)}
+                      >{fmtNumber(data.to_price, 2)}</span> <span className="unit">KRW</span>
+                    </td>
                     <td>
                       <span className={`badge ${Number(data.profit_percentage) >= 0 ? 'up':'down'} num pct`}>
                         {fmtPercent(data.profit_percentage, 2)}%
                       </span>
                     </td>
-                    <td><span className="num">₩ {fmtNumber(sum, 0)}</span></td>
+                    <td>
+                      <span className="num">₩ {fmtNumber(sum, 0)}</span>
+                      {sumCompact && <span className="unit" style={{marginLeft:6}}>({sumCompact})</span>}
+                    </td>
                   </tr>
                 )})}
               </tbody>
