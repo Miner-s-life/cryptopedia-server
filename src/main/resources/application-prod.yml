@@ -26,3 +26,7 @@ logging:
     kr.cryptopedia: INFO
     org.hibernate.SQL: WARN
     org.hibernate.type.descriptor.sql.BasicBinder: WARN
+
+binance:
+  futures:
+    base-url: https://fapi.binance.com
