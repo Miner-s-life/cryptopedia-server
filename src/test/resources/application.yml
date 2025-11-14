@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: cryptopedia-api-test
+  
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  h2:
+    console:
+      enabled: true
+
+logging:
+  level:
+    kr.cryptopedia: INFO
+    org.hibernate.SQL: WARN

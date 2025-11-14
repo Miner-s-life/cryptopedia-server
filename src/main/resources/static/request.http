@@ -1,0 +1,38 @@
+### Health Check
+GET {{baseUrl}}/api/v1/health
+
+### Get All Cryptocurrencies
+GET {{baseUrl}}/api/v1/cryptocurrencies
+
+### Create Bitcoin
+POST {{baseUrl}}/api/v1/cryptocurrencies
+Content-Type: application/json
+
+{
+  "symbol": "BTC",
+  "name": "Bitcoin",
+  "currentPrice": 50000.00
+}
+
+### Create Ethereum
+POST {{baseUrl}}/api/v1/cryptocurrencies
+Content-Type: application/json
+
+{
+  "symbol": "ETH",
+  "name": "Ethereum",
+  "currentPrice": 3000.00
+}
+
+### Create Dogecoin
+POST {{baseUrl}}/api/v1/cryptocurrencies
+Content-Type: application/json
+
+{
+  "symbol": "DOGE",
+  "name": "Dogecoin",
+  "currentPrice": 0.08
+}
+
+### Get All Cryptocurrencies (after creating some)
+GET {{baseUrl}}/api/v1/cryptocurrencies
