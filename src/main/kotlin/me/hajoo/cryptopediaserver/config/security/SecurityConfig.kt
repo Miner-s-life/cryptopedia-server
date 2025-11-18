@@ -33,7 +33,10 @@ class SecurityConfig(
 
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
-                        "/swagger-ui/**"
+                        "/swagger-ui/**",
+
+                        "/actuator/health",
+                        "/actuator/info"
                     ).permitAll()
                     .anyRequest().authenticated()
             }
