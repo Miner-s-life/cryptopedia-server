@@ -38,3 +38,8 @@ logging:
 binance:
   futures:
     base-url: https://fapi.binance.com
+
+jwt:
+  secret: c2VjdXJlLWFuZC1sb25nLXN1cGVyLXNlY3JldC1rZXktMTIzNDU2Nzg5
+  access-token-validity-in-seconds: 1800
+  refresh-token-validity-in-seconds: 1209600
