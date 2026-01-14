@@ -2,8 +2,6 @@
 FROM amazoncorretto:21 AS build
 WORKDIR /app
 
-ARG APP_MODULE=cryptopedia-ex-api
-
 COPY gradlew .
 COPY gradle gradle
 COPY build.gradle* .
@@ -11,15 +9,13 @@ COPY settings.gradle* .
 
 COPY cryptopedia-ex-api ./cryptopedia-ex-api
 COPY cryptopedia-core ./cryptopedia-core
-COPY cryptopedia-ex-batch ./cryptopedia-ex-batch
 
 RUN chmod +x ./gradlew
-RUN ./gradlew :${APP_MODULE}:bootJar --no-daemon
+RUN ./gradlew :cryptopedia-ex-api:bootJar --no-daemon
 
 # Runtime stage
 FROM amazoncorretto:21
 WORKDIR /app
-ARG APP_MODULE=cryptopedia-ex-api
-COPY --from=build /app/${APP_MODULE}/build/libs/*.jar app.jar
+COPY --from=build /app/cryptopedia-ex-api/build/libs/*.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -8,10 +8,19 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: miner-s-life/cryptopedia-api
 
 jobs:
   build-and-push:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ex-api
+            module: cryptopedia-ex-api
+            image_name: miner-s-life/cryptopedia-ex-api
+          - name: ex-batch
+            module: cryptopedia-ex-batch
+            image_name: miner-s-life/cryptopedia-ex-batch
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,10 +50,10 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run tests
-        run: ./gradlew test
+        run: ./gradlew :${{ matrix.module }}:test
 
       - name: Build JAR
-        run: ./gradlew bootJar
+        run: ./gradlew :${{ matrix.module }}:bootJar
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
@@ -57,7 +66,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ matrix.image_name }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -68,6 +77,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./${{ matrix.module }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

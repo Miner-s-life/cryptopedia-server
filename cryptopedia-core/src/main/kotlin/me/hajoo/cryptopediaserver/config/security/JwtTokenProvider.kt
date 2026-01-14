@@ -5,14 +5,14 @@ import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
 import io.jsonwebtoken.io.Decoders
 import io.jsonwebtoken.security.Keys
-import java.security.Key
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-import java.util.Date
 import me.hajoo.cryptopediaserver.user.domain.User
 import me.hajoo.cryptopediaserver.user.domain.UserRole
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.security.Key
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.Date
 
 @Component
 class JwtTokenProvider(

@@ -1,60 +1,25 @@
 plugins {
-    kotlin("jvm") version "1.9.25"
-    kotlin("plugin.spring") version "1.9.25"
-    kotlin("plugin.jpa") version "1.9.25"
-    id("org.springframework.boot") version "3.5.7"
-    id("io.spring.dependency-management") version "1.1.7"
+    kotlin("jvm") version "1.9.25" apply false
+    kotlin("plugin.spring") version "1.9.25" apply false
+    kotlin("plugin.jpa") version "1.9.25" apply false
+    id("org.springframework.boot") version "3.5.7" apply false
+    id("io.spring.dependency-management") version "1.1.7" apply false
 }
 
 group = "me.hajoo"
 version = "0.0.1-SNAPSHOT"
 description = "cryptopedia-server"
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+
+subprojects {
+    group = rootProject.group
+    version = rootProject.version
+
+    repositories {
+        mavenCentral()
     }
-}
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-security")
-    
-    implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
-
-    runtimeOnly("com.mysql:mysql-connector-j")
-    testRuntimeOnly("com.h2database:h2")
-    
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("io.jsonwebtoken:jjwt-api:0.11.5")
-    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.11.5")
-    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.11.5")
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0")
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-}
-
-dependencyManagement {
-    imports {
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.0.0")
+    tasks.withType<Test> {
+        useJUnitPlatform()
     }
-}
-
-kotlin {
-    compilerOptions {
-        freeCompilerArgs.addAll("-Xjsr305=strict")
-    }
-}
-
-tasks.withType<Test> {
-    useJUnitPlatform()
 }
