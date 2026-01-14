@@ -1,11 +1,11 @@
-package me.hajoo.cryptopediaserver.markingestor
+package me.hajoo.cryptopediaserver.batch
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 @SpringBootApplication
-class MarketIngestorApplication
+class CryptopediaBatchApplication
 
 fun main(args: Array<String>) {
-    runApplication<MarketIngestorApplication>(*args)
+    runApplication<CryptopediaBatchApplication>(*args)
 }

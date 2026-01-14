@@ -1,4 +1,4 @@
-package me.hajoo.cryptopediaserver.config.security
+package me.hajoo.cryptopediaserver.api.config.security
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration

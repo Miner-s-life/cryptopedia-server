@@ -1,4 +1,4 @@
-package me.hajoo.cryptopediaserver.auth.api
+package me.hajoo.cryptopediaserver.api.auth
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
