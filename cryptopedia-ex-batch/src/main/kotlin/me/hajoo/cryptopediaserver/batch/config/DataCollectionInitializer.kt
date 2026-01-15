@@ -18,8 +18,6 @@ class DataCollectionInitializer(
     override fun run(vararg args: String?) {
         logger.info("Starting Data Collection Initializer...")
 
-        logger.info("Starting Data Collection Initializer...")
-
         val targetSymbols = listOf("BTCUSDT", "ETHUSDT", "XRPUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT")
         
         targetSymbols.forEach { symbolStr ->
@@ -27,8 +25,6 @@ class DataCollectionInitializer(
                 logger.info("Seeding symbol: $symbolStr")
                 symbolRepository.save(
                     Symbol(
-                        exchange = "BINANCE",
-                        symbol = symbolStr,
                         exchange = "BINANCE",
                         symbol = symbolStr,
                         baseAsset = symbolStr.replace("USDT", ""),

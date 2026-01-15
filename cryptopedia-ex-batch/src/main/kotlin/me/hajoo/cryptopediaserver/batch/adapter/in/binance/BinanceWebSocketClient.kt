@@ -72,8 +72,6 @@ class BinanceWebSocketClient(
         val symbol = node.get("s").asText()
         val kline = node.get("k")
         val isClosed = kline.get("x").asBoolean()
-        
-        val isClosed = kline.get("x").asBoolean()
 
         
         marketDataIngestionService.processKline(

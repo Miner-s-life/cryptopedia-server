@@ -27,7 +27,6 @@ class MarketDataIngestionServiceImpl(
         trades: Long
     ) {
         val openTimeLdt = LocalDateTime.ofInstant(Instant.ofEpochMilli(openTime), ZoneId.of("UTC"))
-        val openTimeLdt = LocalDateTime.ofInstant(Instant.ofEpochMilli(openTime), ZoneId.of("UTC"))
         val exchange = "BINANCE"
 
         val existing = candle1mRepository.findByExchangeAndSymbolAndOpenTime(exchange, symbol, openTimeLdt)
