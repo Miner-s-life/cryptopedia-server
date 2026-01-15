@@ -2,6 +2,7 @@ plugins {
     id("org.springframework.boot")
     kotlin("jvm")
     kotlin("plugin.spring")
+    kotlin("plugin.jpa")
     id("io.spring.dependency-management")
 }
 
@@ -27,6 +28,10 @@ dependencies {
     implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
 
     runtimeOnly("com.mysql:mysql-connector-j")
+
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
