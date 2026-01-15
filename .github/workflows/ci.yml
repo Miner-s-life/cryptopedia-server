@@ -22,6 +22,9 @@ jobs:
             module: cryptopedia-ex-batch
             image_name: miner-s-life/cryptopedia-ex-batch
     runs-on: ubuntu-latest
+    concurrency:
+      group: infra-update-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
@@ -74,6 +77,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -81,3 +85,70 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Update cryptopedia-infra image patch (CD)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          INFRA_REPO: Miner-s-life/cryptopedia-infra
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${IMAGE_DIGEST}" ]; then
+            echo "Missing image digest output from docker/build-push-action"
+            exit 1
+          fi
+
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          rm -rf cryptopedia-infra
+          git clone "https://x-access-token:${{ secrets.INFRA_REPO_TOKEN }}@github.com/${INFRA_REPO}.git" cryptopedia-infra
+
+          if [ "${{ matrix.name }}" = "ex-api" ]; then
+            PATCH_FILE="cryptopedia-infra/clusters/home/apps/cryptopedia-api-image-patch.yaml"
+            IMAGE_REPO="ghcr.io/miner-s-life/cryptopedia-ex-api"
+          elif [ "${{ matrix.name }}" = "ex-batch" ]; then
+            PATCH_FILE="cryptopedia-infra/clusters/home/apps/cryptopedia-batch-image-patch.yaml"
+            IMAGE_REPO="ghcr.io/miner-s-life/cryptopedia-ex-batch"
+          else
+            echo "Unknown matrix.name: ${{ matrix.name }}"
+            exit 1
+          fi
+
+          export PATCH_FILE
+          export IMAGE_REPO
+
+          python - <<'PY'
+          import os, re
+          patch_file = os.environ["PATCH_FILE"]
+          image_repo = os.environ["IMAGE_REPO"]
+          digest = os.environ["IMAGE_DIGEST"]
+
+          with open(patch_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+          out = []
+          replaced = False
+          for line in lines:
+            if (not replaced) and re.match(r"^\s*image:\s*", line):
+              m = re.match(r"^(\s*image:\s*)(\S+)(.*)$", line)
+              if not m:
+                raise SystemExit(f"Unable to parse image line: {line}")
+              prefix, _old, suffix = m.groups()
+              out.append(f"{prefix}{image_repo}@{digest}{suffix}\n")
+              replaced = True
+            else:
+              out.append(line)
+
+          if not replaced:
+            raise SystemExit(f"No image line found in {patch_file}")
+
+          with open(patch_file, "w", encoding="utf-8") as f:
+            f.writelines(out)
+          PY
+
+          cd cryptopedia-infra
+          git add "clusters/home/apps/$(basename "${PATCH_FILE}")"
+          git commit -m "chore(cd): update ${{ matrix.name }} image to ${IMAGE_DIGEST}" || exit 0
+          git push
