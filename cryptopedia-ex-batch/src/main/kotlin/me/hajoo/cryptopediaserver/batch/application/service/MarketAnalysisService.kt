@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.Instant
 import java.time.LocalDate
 
 @Service
@@ -13,7 +14,8 @@ class MarketAnalysisService(
     private val symbolRepository: SymbolRepository,
     private val candle1mRepository: Candle1mRepository,
     private val dailyVolumeStatsRepository: DailyVolumeStatsRepository,
-    private val symbolMetricsRepository: SymbolMetricsRepository
+    private val symbolMetricsRepository: SymbolMetricsRepository,
+    private val binanceRestClient: me.hajoo.cryptopediaserver.batch.adapter.out.binance.BinanceRestClient
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -180,5 +182,75 @@ class MarketAnalysisService(
                 logger.error("Real-time metrics error for ${symbol.symbol}", e)
             }
         }
+    }
+
+    @Transactional
+    fun backfillHistory(symbol: String) {
+        // Double check if we already have stats to avoid spamming API on every restart
+        val today = LocalDate.now(java.time.ZoneId.of("UTC"))
+        val yesterday = today.minusDays(1)
+        if (dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate("BINANCE", symbol, yesterday) != null) {
+            return
+        }
+
+        logger.info("Backfilling history for $symbol...")
+        val klines = binanceRestClient.getDailyKlines(symbol, 60) // Fetch 60 days to have enough for MA30
+        if (klines.isEmpty()) return
+
+        // Sort by date ascending to calculate MAs properly
+        val sortedKlines = klines.sortedBy { it.openTime }
+        
+        // In-memory list to help calc MAs
+        val statsList = mutableListOf<DailyVolumeStats>()
+
+        sortedKlines.forEach { kline ->
+            val date = java.time.LocalDateTime.ofInstant(Instant.ofEpochMilli(kline.openTime), java.time.ZoneId.of("UTC")).toLocalDate()
+            
+            // Calculate MA based on previous stats in statsList
+            // MA7
+            val last7 = statsList.takeLast(7)
+            val ma7 = if (last7.isNotEmpty()) {
+                val sum = last7.fold(BigDecimal.ZERO) { acc, s -> acc.add(s.volumeSum) }
+                // Include current? Usually MA is based on closed candles. 
+                // Since 'kline' is a finished daily candle (mostly), we can include it or just strictly use past N.
+                // Standard MA: Average of last N candles (including current if it's the reference point? No, usually Close Price MA includes current close. Volume MA includes current volume)
+                // Let's include current volume in the window if we treat this data point as "closed day".
+                
+                val buffer = last7.map { it.volumeSum } + kline.volume
+                // If we want MA7 of *this* day, it's average of (d-6 ... d). 
+                val window = buffer.takeLast(7)
+                window.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(window.size), 8, RoundingMode.HALF_UP)
+            } else kline.volume // Fallback?
+
+            // MA30
+            val last30 = statsList.takeLast(30)
+            val ma30 = if (last30.isNotEmpty()) {
+                val buffer = last30.map { it.volumeSum } + kline.volume
+                val window = buffer.takeLast(30)
+                window.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(window.size), 8, RoundingMode.HALF_UP)
+            } else kline.volume
+
+            val stats = DailyVolumeStats(
+                exchange = "BINANCE",
+                symbol = symbol,
+                date = date,
+                volumeSum = kline.volume,
+                quoteVolumeSum = kline.quoteVolume,
+                volumeMa7d = ma7,
+                volumeMa30d = ma30
+            )
+            
+            // Save to list and DB
+            statsList.add(stats)
+            
+            // Upsert to DB
+            val existing = dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate("BINANCE", symbol, date)
+            if (existing != null) {
+                // Skip or update? Skip for backfill speed usually
+            } else {
+                dailyVolumeStatsRepository.save(stats)
+            }
+        }
+        logger.info("Backfill complete for $symbol: ${statsList.size} days processed.")
     }
 }

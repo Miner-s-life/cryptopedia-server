@@ -10,7 +10,8 @@ import org.springframework.stereotype.Component
 @Component
 class DataCollectionInitializer(
     private val symbolRepository: SymbolRepository,
-    private val binanceWebSocketClient: BinanceWebSocketClient
+    private val binanceWebSocketClient: BinanceWebSocketClient,
+    private val marketAnalysisService: me.hajoo.cryptopediaserver.batch.application.service.MarketAnalysisService
 ) : CommandLineRunner {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -32,6 +33,12 @@ class DataCollectionInitializer(
                         status = "TRADING"
                     )
                 )
+                // Trigger Backfill for new symbol
+                marketAnalysisService.backfillHistory(symbolStr)
+            } else {
+                 // Even if exists, check if backfill needed? 
+                 // The service checks inside backfillHistory if data exists.
+                 marketAnalysisService.backfillHistory(symbolStr)
             }
         }
 
