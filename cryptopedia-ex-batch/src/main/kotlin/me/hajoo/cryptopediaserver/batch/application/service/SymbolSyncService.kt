@@ -1,0 +1,66 @@
+package me.hajoo.cryptopediaserver.batch.application.service
+
+import me.hajoo.cryptopediaserver.batch.adapter.`in`.binance.BinanceWebSocketClient
+import me.hajoo.cryptopediaserver.core.client.binance.BinanceFuturesMarketClient
+import me.hajoo.cryptopediaserver.core.domain.Symbol
+import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
+import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+
+@Service
+class SymbolSyncService(
+    private val symbolRepository: SymbolRepository,
+    private val binanceFuturesMarketClient: BinanceFuturesMarketClient,
+    private val marketAnalysisService: MarketAnalysisService,
+    private val binanceWebSocketClient: BinanceWebSocketClient
+) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
+    @Scheduled(fixedRate = 3600000) // 1 hour
+    @Transactional
+    fun syncTopVolumeSymbols() {
+        logger.info("Starting Symbol Sync Job...")
+        try {
+            val allTickers = try {
+                binanceFuturesMarketClient.getAll24hTickers()
+            } catch (e: Exception) {
+                logger.error("Failed to fetch tickers", e)
+                return
+            }
+
+            val topSymbols = allTickers
+                .filter { it.symbol.endsWith("USDT") }
+                .sortedByDescending { it.quoteVolume }
+                .take(100)
+                .map { it.symbol }
+
+            val newSymbols = mutableListOf<String>()
+
+            topSymbols.forEach { symbolStr ->
+                if (symbolRepository.findByExchangeAndSymbol("BINANCE", symbolStr) == null) {
+                    logger.info("Found new top symbol: $symbolStr")
+                    symbolRepository.save(
+                        Symbol(
+                            exchange = "BINANCE",
+                            symbol = symbolStr,
+                            baseAsset = symbolStr.replace("USDT", ""),
+                            quoteAsset = "USDT",
+                            status = "TRADING"
+                        )
+                    )
+                    marketAnalysisService.backfillHistory(symbolStr)
+                    newSymbols.add(symbolStr)
+                }
+            }
+
+            if (newSymbols.isNotEmpty()) {
+                logger.info("Subscribing to ${newSymbols.size} new symbols")
+                binanceWebSocketClient.subscribe(newSymbols)
+            }
+        } catch (e: Exception) {
+            logger.error("Error during symbol sync", e)
+        }
+    }
+}

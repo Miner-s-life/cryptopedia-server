@@ -20,26 +20,59 @@ class BinanceWebSocketClient(
         .build()
 
     private var webSocket: WebSocket? = null
-    private val baseUrl = "wss://stream.binance.com:9443/stream?streams="
+    private val baseUrl = "wss://stream.binance.com:9443/stream"
+    private var isConnected = false
 
     fun connect(symbols: List<String>) {
-        if (symbols.isEmpty()) return
-
-        val streams = symbols.joinToString("/") { symbol ->
-            val s = symbol.lowercase()
-            "$s@kline_1m/$s@ticker"
-        }
-        
         val request = Request.Builder()
-            .url(baseUrl + streams)
+            .url(baseUrl)
             .build()
 
         webSocket = client.newWebSocket(request, this)
-        logger.info("Connecting to Binance WebSocket with streams for ${symbols.size} symbols")
+        // Wait for connection to open? Or just queue subscription? 
+        // Binance usually connects fast. We can subscribe in onOpen or send immediately if ready.
+        // For simplicity, we'll store initial symbols and subscribe in onOpen.
+        this.pendingSymbols.addAll(symbols)
+    }
+
+    private val pendingSymbols = mutableSetOf<String>()
+
+    fun subscribe(symbols: List<String>) {
+        if (symbols.isEmpty()) return
+
+        if (!isConnected) {
+            pendingSymbols.addAll(symbols)
+            return
+        }
+
+        // Chunking to avoid "too many params" if any (though standard limit is high)
+        symbols.chunked(50).forEach { chunk ->
+            val params = chunk.map { symbol ->
+                val s = symbol.lowercase()
+                listOf("$s@kline_1m", "$s@ticker")
+            }.flatten()
+
+            val payload = """
+            {
+                "method": "SUBSCRIBE",
+                "params": ${objectMapper.writeValueAsString(params)},
+                "id": ${System.currentTimeMillis()}
+            }
+            """.trimIndent()
+            
+            webSocket?.send(payload)
+            logger.info("Sent SUBSCRIBE for ${chunk.size} symbols")
+        }
     }
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
         logger.info("Connected to Binance WebSocket")
+        isConnected = true
+        
+        if (pendingSymbols.isNotEmpty()) {
+            subscribe(pendingSymbols.toList())
+            pendingSymbols.clear()
+        }
     }
 
     override fun onMessage(webSocket: WebSocket, text: String) {
@@ -61,10 +94,12 @@ class BinanceWebSocketClient(
 
     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
         logger.info("Binance WebSocket closed: $code / $reason")
+        isConnected = false
     }
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
         logger.error("Binance WebSocket failure", t)
+        isConnected = false
         // Simple reconnect logic could go here
     }
 
