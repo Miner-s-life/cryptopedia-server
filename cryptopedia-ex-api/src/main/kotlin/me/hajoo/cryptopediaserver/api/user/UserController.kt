@@ -2,6 +2,7 @@ package me.hajoo.cryptopediaserver.api.user
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import me.hajoo.cryptopediaserver.core.common.response.ApiResponse
 import me.hajoo.cryptopediaserver.user.application.MeResponse
 import me.hajoo.cryptopediaserver.user.application.UserService
 import org.springframework.http.ResponseEntity
@@ -11,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/users")
+@RequestMapping("/api/v1/users")
 class UserController(
     private val userService: UserService,
 ) {
@@ -19,9 +20,9 @@ class UserController(
     @GetMapping("/me")
     @Operation(summary = "내 정보 조회", description = "현재 로그인한 사용자의 기본 프로필 정보를 조회합니다.")
     @SecurityRequirement(name = "bearerAuth")
-    fun getMe(authentication: Authentication): ResponseEntity<MeResponse> {
+    fun getMe(authentication: Authentication): ResponseEntity<ApiResponse<MeResponse>> {
         val userId = authentication.principal as Long
         val response = userService.getMe(userId)
-        return ResponseEntity.ok(response)
+        return ResponseEntity.ok(ApiResponse.success(response))
     }
 }
