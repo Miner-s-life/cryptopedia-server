@@ -43,3 +43,7 @@ jwt:
   secret: c2VjdXJlLWFuZC1sb25nLXN1cGVyLXNlY3JldC1rZXktMTIzNDU2Nzg5
   access-token-validity-in-seconds: 1800
   refresh-token-validity-in-seconds: 1209600
+
+slack:
+  webhook:
+    url: https://hooks.slack.com/services/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

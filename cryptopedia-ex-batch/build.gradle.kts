@@ -20,6 +20,7 @@ dependencyManagement {
 
 dependencies {
     implementation(project(":cryptopedia-core"))
+    implementation(project(":cryptopedia-client"))
 
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-web")

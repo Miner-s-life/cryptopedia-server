@@ -12,9 +12,9 @@ import org.springframework.context.annotation.ComponentScan
 @SpringBootApplication
 @EnableScheduling
 @EnableFeignClients
-@ComponentScan(basePackages = ["me.hajoo.cryptopediaserver.core"])
-@EntityScan(basePackages = ["me.hajoo.cryptopediaserver.core"])
-@EnableJpaRepositories(basePackages = ["me.hajoo.cryptopediaserver.core"])
+@ComponentScan(basePackages = ["me.hajoo.cryptopediaserver"])
+@EntityScan(basePackages = ["me.hajoo.cryptopediaserver"])
+@EnableJpaRepositories(basePackages = ["me.hajoo.cryptopediaserver"])
 class CryptopediaBatchApplication
 
 fun main(args: Array<String>) {

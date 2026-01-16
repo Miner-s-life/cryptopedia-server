@@ -23,7 +23,8 @@ class MarketAnalysisService(
     private val dailyVolumeStatsRepository: DailyVolumeStatsRepository,
     private val symbolMetricsRepository: SymbolMetricsRepository,
     private val binanceRestClient: BinanceRestClient,
-    private val redisTemplate: RedisTemplate<String, String>
+    private val redisTemplate: RedisTemplate<String, String>,
+    private val alertService: AlertService
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -193,6 +194,11 @@ class MarketAnalysisService(
                 
                 // 5. Cache to Redis
                 cacheMetricsToRedis(metrics)
+                
+                // 6. Alerting
+                if (metrics.isSurging) {
+                    alertService.sendSurgeAlert(metrics)
+                }
 
             } catch (e: Exception) {
                 logger.error("Real-time metrics error for ${symbol.symbol}", e)
