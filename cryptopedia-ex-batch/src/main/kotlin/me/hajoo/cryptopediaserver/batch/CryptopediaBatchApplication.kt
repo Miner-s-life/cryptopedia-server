@@ -11,7 +11,7 @@ import org.springframework.context.annotation.ComponentScan
 
 @SpringBootApplication
 @EnableScheduling
-@EnableFeignClients
+@EnableFeignClients(basePackages = ["me.hajoo.cryptopediaserver"])
 @ComponentScan(basePackages = ["me.hajoo.cryptopediaserver"])
 @EntityScan(basePackages = ["me.hajoo.cryptopediaserver"])
 @EnableJpaRepositories(basePackages = ["me.hajoo.cryptopediaserver"])

@@ -23,7 +23,11 @@ class DataCollectionInitializer(
         symbolSyncService.syncTopVolumeSymbols()
 
         // 2. Connect WebSocket for ALL active symbols (including newly synced ones)
+        val allSymbolsCount = symbolRepository.count()
         val activeSymbols = symbolRepository.findAllByStatus("TRADING").map { it.symbol }
+        
+        logger.info("Database total symbols: $allSymbolsCount, Active symbols: ${activeSymbols.size}")
+
         if (activeSymbols.isNotEmpty()) {
             logger.info("Connecting WebSocket for ${activeSymbols.size} symbols")
             binanceWebSocketClient.connect(activeSymbols)

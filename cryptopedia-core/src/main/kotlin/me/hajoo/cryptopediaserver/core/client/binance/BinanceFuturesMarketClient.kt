@@ -37,11 +37,6 @@ interface BinanceFuturesMarketClient {
     ): List<FuturesKline>
 
     @GetMapping("/fapi/v1/ticker/24hr")
-    fun get24hTicker(
-        @RequestParam("symbol") symbol: String
-    ): FuturesTicker24h
-
-    @GetMapping("/fapi/v1/ticker/24hr")
     fun getAll24hTickers(): List<FuturesTicker24h>
 
     @GetMapping("/fapi/v1/ticker/bookTicker")

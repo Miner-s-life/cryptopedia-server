@@ -22,10 +22,10 @@ class SymbolMetrics(
     @Column(nullable = false, length = 20)
     val symbol: String,
 
-    @Column(nullable = false, precision = 10, scale = 4)
+    @Column(nullable = false, precision = 32, scale = 8)
     var rvol: BigDecimal, // Relative Volume (Current / Average)
 
-    @Column(nullable = false, precision = 10, scale = 4)
+    @Column(nullable = false, precision = 32, scale = 8)
     var priceChangePercent24h: BigDecimal,
     
     @Column(nullable = false)

@@ -25,22 +25,22 @@ class Candle1m(
     @Column(nullable = false)
     val openTime: LocalDateTime,
 
-    @Column(nullable = false, precision = 18, scale = 8)
+    @Column(nullable = false, precision = 32, scale = 8)
     val openPrice: BigDecimal,
 
-    @Column(nullable = false, precision = 18, scale = 8)
+    @Column(nullable = false, precision = 32, scale = 8)
     val highPrice: BigDecimal,
 
-    @Column(nullable = false, precision = 18, scale = 8)
+    @Column(nullable = false, precision = 32, scale = 8)
     val lowPrice: BigDecimal,
 
-    @Column(nullable = false, precision = 18, scale = 8)
+    @Column(nullable = false, precision = 32, scale = 8)
     val closePrice: BigDecimal,
 
-    @Column(nullable = false, precision = 18, scale = 8)
+    @Column(nullable = false, precision = 32, scale = 8)
     val volume: BigDecimal, // Base Asset Volume
 
-    @Column(nullable = false, precision = 18, scale = 8)
+    @Column(nullable = false, precision = 32, scale = 8)
     val quoteVolume: BigDecimal, // Quote Asset Volume
 
     @Column(nullable = false)
