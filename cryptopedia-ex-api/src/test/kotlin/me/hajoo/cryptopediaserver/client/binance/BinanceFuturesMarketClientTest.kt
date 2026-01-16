@@ -1,9 +1,10 @@
 package me.hajoo.cryptopediaserver.client.binance
-import me.hajoo.cryptopediaserver.client.binance.dto.FuturesBookTicker
-import me.hajoo.cryptopediaserver.client.binance.dto.FuturesDepth
-import me.hajoo.cryptopediaserver.client.binance.dto.FuturesKline
-import me.hajoo.cryptopediaserver.client.binance.dto.FuturesRecentTrade
-import me.hajoo.cryptopediaserver.client.binance.dto.FuturesTicker24h
+import me.hajoo.cryptopediaserver.core.client.binance.BinanceFuturesMarketClient
+import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesBookTicker
+import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesDepth
+import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesKline
+import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesRecentTrade
+import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesTicker24h
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.assertj.core.api.Assertions.assertThat

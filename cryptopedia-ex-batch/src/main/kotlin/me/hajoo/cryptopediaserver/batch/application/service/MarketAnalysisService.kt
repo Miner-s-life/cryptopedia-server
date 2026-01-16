@@ -1,6 +1,11 @@
 package me.hajoo.cryptopediaserver.batch.application.service
 
-import me.hajoo.cryptopediaserver.market.domain.*
+import me.hajoo.cryptopediaserver.core.domain.Candle1mRepository
+import me.hajoo.cryptopediaserver.core.domain.DailyVolumeStats
+import me.hajoo.cryptopediaserver.core.domain.DailyVolumeStatsRepository
+import me.hajoo.cryptopediaserver.core.domain.SymbolMetrics
+import me.hajoo.cryptopediaserver.core.domain.SymbolMetricsRepository
+import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -42,14 +47,14 @@ class MarketAnalysisService(
                 val savedStats = if (existing != null) {
                     // Normally shouldn't happen for past dates unless re-running
                     dailyVolumeStatsRepository.save(
-                         DailyVolumeStats(
-                             id = existing.id,
-                             exchange = symbol.exchange,
-                             symbol = symbol.symbol,
-                             date = targetDate,
-                             volumeSum = volumeSum,
-                             quoteVolumeSum = BigDecimal.ZERO // TODO: Add quote volume support later if needed
-                         )
+                        DailyVolumeStats(
+                            id = existing.id,
+                            exchange = symbol.exchange,
+                            symbol = symbol.symbol,
+                            date = targetDate,
+                            volumeSum = volumeSum,
+                            quoteVolumeSum = BigDecimal.ZERO // TODO: Add quote volume support later if needed
+                        )
                     )
                 } else {
                     dailyVolumeStatsRepository.save(
@@ -166,7 +171,12 @@ class MarketAnalysisService(
 
                 // 4. Update Metrics Table
                 val metrics = symbolMetricsRepository.findByExchangeAndSymbol(symbol.exchange, symbol.symbol)
-                    ?: SymbolMetrics(exchange = symbol.exchange, symbol = symbol.symbol, rvol = BigDecimal.ZERO, priceChangePercent24h = BigDecimal.ZERO)
+                    ?: SymbolMetrics(
+                        exchange = symbol.exchange,
+                        symbol = symbol.symbol,
+                        rvol = BigDecimal.ZERO,
+                        priceChangePercent24h = BigDecimal.ZERO
+                    )
 
                 metrics.apply {
                     this.rvol = rvol

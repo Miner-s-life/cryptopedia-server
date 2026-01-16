@@ -1,6 +1,9 @@
 package me.hajoo.cryptopediaserver.batch.application.service
 
-import me.hajoo.cryptopediaserver.market.domain.*
+import me.hajoo.cryptopediaserver.core.domain.Candle1m
+import me.hajoo.cryptopediaserver.core.domain.Candle1mRepository
+import me.hajoo.cryptopediaserver.core.domain.Ticker24hLatest
+import me.hajoo.cryptopediaserver.core.domain.Ticker24hLatestRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -48,18 +51,18 @@ class MarketDataIngestionServiceImpl(
             candle1mRepository.save(updated)
         } else {
              candle1mRepository.save(
-                Candle1m(
-                    exchange = exchange,
-                    symbol = symbol,
-                    openTime = openTimeLdt,
-                    openPrice = open,
-                    highPrice = high,
-                    lowPrice = low,
-                    closePrice = close,
-                    volume = volume,
-                    quoteVolume = quoteVolume,
-                    trades = trades
-                )
+                 Candle1m(
+                     exchange = exchange,
+                     symbol = symbol,
+                     openTime = openTimeLdt,
+                     openPrice = open,
+                     highPrice = high,
+                     lowPrice = low,
+                     closePrice = close,
+                     volume = volume,
+                     quoteVolume = quoteVolume,
+                     trades = trades
+                 )
             )
         }
     }

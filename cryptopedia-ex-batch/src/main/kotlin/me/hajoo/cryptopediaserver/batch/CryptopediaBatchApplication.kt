@@ -7,12 +7,14 @@ import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.cloud.openfeign.EnableFeignClients
+import org.springframework.context.annotation.ComponentScan
 
 @SpringBootApplication
 @EnableScheduling
 @EnableFeignClients
-@EntityScan(basePackages = ["me.hajoo.cryptopediaserver"])
-@EnableJpaRepositories(basePackages = ["me.hajoo.cryptopediaserver"])
+@ComponentScan(basePackages = ["me.hajoo.cryptopediaserver.core"])
+@EntityScan(basePackages = ["me.hajoo.cryptopediaserver.core"])
+@EnableJpaRepositories(basePackages = ["me.hajoo.cryptopediaserver.core"])
 class CryptopediaBatchApplication
 
 fun main(args: Array<String>) {

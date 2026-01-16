@@ -3,8 +3,8 @@ package me.hajoo.cryptopediaserver.api.config.security
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import me.hajoo.cryptopediaserver.config.security.JwtTokenProvider
-import me.hajoo.cryptopediaserver.user.domain.UserRole
+import me.hajoo.cryptopediaserver.core.security.JwtTokenProvider
+import me.hajoo.cryptopediaserver.core.domain.UserRole
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder

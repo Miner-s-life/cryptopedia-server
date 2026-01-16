@@ -4,7 +4,7 @@ server:
 spring:
   application:
     name: cryptopedia-api
-  
+
   datasource:
     url: jdbc:mysql://localhost:3306/cryptopedia?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
     username: root

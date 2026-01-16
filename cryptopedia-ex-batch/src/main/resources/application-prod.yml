@@ -2,6 +2,10 @@ server:
   port: 8080
 
 spring:
+  data:
+    redis:
+      host: redis-master.db.svc.cluster.local
+      port: 6379
   datasource:
     url: jdbc:mysql://mysql.db.svc.cluster.local:3306/cryptopedia?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
     username: root
@@ -33,7 +37,6 @@ logging:
 binance:
   futures:
     base-url: https://fapi.binance.com
-
 
 jwt:
   secret: c2VjdXJlLWFuZC1sb25nLXN1cGVyLXNlY3JldC1rZXktMTIzNDU2Nzg5

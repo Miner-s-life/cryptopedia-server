@@ -1,8 +1,8 @@
 package me.hajoo.cryptopediaserver.batch.config
 
 import me.hajoo.cryptopediaserver.batch.adapter.`in`.binance.BinanceWebSocketClient
-import me.hajoo.cryptopediaserver.market.domain.Symbol
-import me.hajoo.cryptopediaserver.market.domain.SymbolRepository
+import me.hajoo.cryptopediaserver.core.domain.Symbol
+import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
 import org.slf4j.LoggerFactory
 import org.springframework.boot.CommandLineRunner
 import org.springframework.stereotype.Component
