@@ -1,5 +1,10 @@
 package me.hajoo.cryptopediaserver.core.client.binance.dto
 
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import java.math.BigDecimal
 
 data class OrderBookEntry(
@@ -23,6 +28,7 @@ data class FuturesRecentTrade(
     val isBestMatch: Boolean
 )
 
+@JsonDeserialize(using = FuturesKlineDeserializer::class)
 data class FuturesKline(
     val openTime: Long,
     val openPrice: BigDecimal,
@@ -36,6 +42,25 @@ data class FuturesKline(
     val takerBuyBaseVolume: BigDecimal,
     val takerBuyQuoteVolume: BigDecimal
 )
+
+class FuturesKlineDeserializer : StdDeserializer<FuturesKline>(FuturesKline::class.java) {
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): FuturesKline {
+        val node: JsonNode = p.codec.readTree(p)
+        return FuturesKline(
+            openTime = node.get(0).asLong(),
+            openPrice = node.get(1).asText().toBigDecimal(),
+            highPrice = node.get(2).asText().toBigDecimal(),
+            lowPrice = node.get(3).asText().toBigDecimal(),
+            closePrice = node.get(4).asText().toBigDecimal(),
+            volume = node.get(5).asText().toBigDecimal(),
+            closeTime = node.get(6).asLong(),
+            quoteAssetVolume = node.get(7).asText().toBigDecimal(),
+            numberOfTrades = node.get(8).asLong(),
+            takerBuyBaseVolume = node.get(9).asText().toBigDecimal(),
+            takerBuyQuoteVolume = node.get(10).asText().toBigDecimal()
+        )
+    }
+}
 
 data class FuturesTicker24h(
     val symbol: String,
