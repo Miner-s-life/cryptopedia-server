@@ -19,6 +19,14 @@ graph TD
         REDIS[(Redis)]
     end
 
+    subgraph "Observability & Infrastructure"
+        direction LR
+        PROMTAIL[Promtail]
+        LOKI[Loki]
+        PROM[Prometheus]
+        GRAFANA[Grafana]
+    end
+
     BN -- "WebSocket/REST" --> BATCH
     UP -- "WebSocket/REST" --> BATCH
     
@@ -29,6 +37,17 @@ graph TD
     API -- "Get Metrics" --> REDIS
     
     UI[Frontend UI] -- "REST API" --> API
+
+    %% Observability Flow
+    BATCH -- "Logs" --> PROMTAIL
+    API -- "Logs" --> PROMTAIL
+    PROMTAIL -- "Push" --> LOKI
+    
+    BATCH -- "Metrics" --> PROM
+    API -- "Metrics" --> PROM
+    
+    LOKI -- "Query" --> GRAFANA
+    PROM -- "Query" --> GRAFANA
 ```
 
 ## Tech Stack
