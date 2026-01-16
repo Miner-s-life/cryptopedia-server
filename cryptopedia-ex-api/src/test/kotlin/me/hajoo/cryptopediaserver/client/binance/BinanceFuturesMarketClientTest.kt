@@ -112,19 +112,20 @@ class BinanceFuturesMarketClientTest {
                 .setBody(
                     """
                 [
-                  {
-                    "openTime": 1499040000000,
-                    "openPrice": "0.01634790",
-                    "highPrice": "0.80000000",
-                    "lowPrice": "0.01575800",
-                    "closePrice": "0.01577100",
-                    "volume": "148976.11427815",
-                    "closeTime": 1499644799999,
-                    "quoteAssetVolume": "2434.19055334",
-                    "numberOfTrades": 308,
-                    "takerBuyBaseVolume": "1756.87402397",
-                    "takerBuyQuoteVolume": "28.46694368"
-                  }
+                  [
+                    1499040000000,
+                    "0.01634790",
+                    "0.80000000",
+                    "0.01575800",
+                    "0.01577100",
+                    "148976.11427815",
+                    1499644799999,
+                    "2434.19055334",
+                    308,
+                    "1756.87402397",
+                    "28.46694368",
+                    "1234.5678"
+                  ]
                 ]
                 """.trimIndent()
                 )
