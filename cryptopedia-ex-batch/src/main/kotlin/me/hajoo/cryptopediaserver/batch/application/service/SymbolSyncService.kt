@@ -43,12 +43,19 @@ class SymbolSyncService(
             topSymbols.forEach { symbolStr ->
                 val existing = symbolRepository.findByExchangeAndSymbol("BINANCE", symbolStr)
                 if (existing == null) {
-                    logger.info("Found new top symbol: $symbolStr")
                     transactionTemplate.execute {
-                        saveNewSymbol(symbolStr)
-                        marketAnalysisService.backfillHistory(symbolStr)
+                        // Double check inside transaction to reduce race window
+                        if (symbolRepository.findByExchangeAndSymbol("BINANCE", symbolStr) == null) {
+                            try {
+                                logger.info("Found new top symbol: $symbolStr")
+                                saveNewSymbol(symbolStr)
+                                marketAnalysisService.backfillHistory(symbolStr)
+                                newSymbols.add(symbolStr)
+                            } catch (e: org.springframework.dao.DataIntegrityViolationException) {
+                                logger.warn("Symbol $symbolStr was already inserted by another thread")
+                            }
+                        }
                     }
-                    newSymbols.add(symbolStr)
                 } else if (existing.status != "TRADING") {
                     logger.info("Enabling existing symbol: $symbolStr")
                     transactionTemplate.execute {
