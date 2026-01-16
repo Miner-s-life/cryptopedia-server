@@ -1,5 +1,6 @@
 package me.hajoo.cryptopediaserver.batch.application.service
 
+import me.hajoo.cryptopediaserver.batch.adapter.out.binance.BinanceRestClient
 import me.hajoo.cryptopediaserver.core.domain.Candle1mRepository
 import me.hajoo.cryptopediaserver.core.domain.DailyVolumeStats
 import me.hajoo.cryptopediaserver.core.domain.DailyVolumeStatsRepository
@@ -7,6 +8,7 @@ import me.hajoo.cryptopediaserver.core.domain.SymbolMetrics
 import me.hajoo.cryptopediaserver.core.domain.SymbolMetricsRepository
 import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
 import org.slf4j.LoggerFactory
+import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -20,7 +22,8 @@ class MarketAnalysisService(
     private val candle1mRepository: Candle1mRepository,
     private val dailyVolumeStatsRepository: DailyVolumeStatsRepository,
     private val symbolMetricsRepository: SymbolMetricsRepository,
-    private val binanceRestClient: me.hajoo.cryptopediaserver.batch.adapter.out.binance.BinanceRestClient
+    private val binanceRestClient: BinanceRestClient,
+    private val redisTemplate: RedisTemplate<String, String>
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -187,11 +190,30 @@ class MarketAnalysisService(
                     // For now let's just update RVOL
                 }
                 symbolMetricsRepository.save(metrics)
+                
+                // 5. Cache to Redis
+                cacheMetricsToRedis(metrics)
 
             } catch (e: Exception) {
                 logger.error("Real-time metrics error for ${symbol.symbol}", e)
             }
         }
+    }
+
+    private fun cacheMetricsToRedis(metrics: SymbolMetrics) {
+        val key = "metrics:${metrics.exchange}:${metrics.symbol}"
+        val value = """
+            {
+                "exchange": "${metrics.exchange}",
+                "symbol": "${metrics.symbol}",
+                "rvol": ${metrics.rvol},
+                "priceChangePercent24h": ${metrics.priceChangePercent24h},
+                "isSurging": ${metrics.isSurging},
+                "lastUpdated": "${metrics.lastUpdated}"
+            }
+        """.trimIndent()
+        
+        redisTemplate.opsForValue().set(key, value, java.time.Duration.ofMinutes(5))
     }
 
     @Transactional
