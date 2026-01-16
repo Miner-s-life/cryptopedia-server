@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
 class SymbolSyncService(
@@ -18,11 +19,17 @@ class SymbolSyncService(
     private val transactionTemplate: TransactionTemplate
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
+    private val isSyncing = AtomicBoolean(false)
 
     @Scheduled(fixedRate = 300000) // 5 minutes
     fun syncTopVolumeSymbols() {
-        logger.info("Starting Symbol Sync Job...")
+        if (!isSyncing.compareAndSet(false, true)) {
+            logger.info("Symbol Sync Job is already running, skipping this execution.")
+            return
+        }
+
         try {
+            logger.info("Starting Symbol Sync Job...")
             val allTickers = try {
                 val tickers = binanceFuturesMarketClient.getAll24hTickers()
                 logger.info("Fetched ${tickers.size} tickers from Binance")
@@ -72,6 +79,8 @@ class SymbolSyncService(
             logger.info("Symbol Sync completed: Top 100 processed, ${newSymbols.size} new symbols added to tracking.")
         } catch (e: Exception) {
             logger.error("Error during symbol sync", e)
+        } finally {
+            isSyncing.set(false)
         }
     }
 
