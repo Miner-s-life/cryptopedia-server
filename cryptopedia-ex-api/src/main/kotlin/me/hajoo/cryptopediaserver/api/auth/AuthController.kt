@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import me.hajoo.cryptopediaserver.auth.application.AuthService
 import me.hajoo.cryptopediaserver.auth.application.AuthTokens
+import me.hajoo.cryptopediaserver.auth.application.SignupRequestService
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.PostMapping
@@ -15,7 +16,20 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/auth")
 class AuthController(
     private val authService: AuthService,
+    private val signupRequestService: SignupRequestService,
 ) {
+
+    @PostMapping("/signup-request")
+    @Operation(summary = "가입 신청", description = "이메일, 비밀번호, 핸드폰번호, 코멘트로 가입 신청을 생성합니다.")
+    fun createSignupRequest(@RequestBody request: CreateSignupRequest): ResponseEntity<Long> {
+        val requestId = signupRequestService.createSignupRequest(
+            email = request.email,
+            rawPassword = request.password,
+            phoneNumber = request.phoneNumber,
+            comment = request.comment,
+        )
+        return ResponseEntity.ok(requestId)
+    }
 
     @PostMapping("/signup")
     @Operation(summary = "회원 가입", description = "이메일, 비밀번호, 닉네임으로 신규 회원을 생성합니다.")
@@ -63,6 +77,13 @@ data class SignupRequest(
 
 data class SignupResponse(
     val userId: Long,
+)
+
+data class CreateSignupRequest(
+    val email: String,
+    val password: String,
+    val phoneNumber: String? = null,
+    val comment: String? = null,
 )
 
 data class LoginRequest(
