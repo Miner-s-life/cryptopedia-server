@@ -9,6 +9,7 @@ COPY settings.gradle* .
 
 COPY cryptopedia-ex-batch ./cryptopedia-ex-batch
 COPY cryptopedia-core ./cryptopedia-core
+COPY cryptopedia-client ./cryptopedia-client
 
 RUN chmod +x ./gradlew
 RUN ./gradlew :cryptopedia-ex-batch:bootJar --no-daemon

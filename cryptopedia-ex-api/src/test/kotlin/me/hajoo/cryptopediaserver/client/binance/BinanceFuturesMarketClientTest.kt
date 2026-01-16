@@ -21,7 +21,7 @@ import org.springframework.test.context.TestPropertySource
 import java.math.BigDecimal
 
 @SpringBootTest
-@EnableFeignClients(basePackages = ["me.hajoo.cryptopediaserver.client"])
+@EnableFeignClients(basePackages = ["me.hajoo.cryptopediaserver.core.client.binance"])
 @TestPropertySource(
     properties = [
         "binance.futures.base-url=http://localhost:8081",
@@ -145,48 +145,51 @@ class BinanceFuturesMarketClientTest {
     }
 
     @Test
-    fun `get24hTicker should call ticker 24hr endpoint and map response`() {
+    fun `getAll24hTickers should call ticker 24hr endpoint and map response`() {
         server.enqueue(
             MockResponse()
                 .setBody(
                     """
-                {
-                  "symbol": "BNBBTC",
-                  "priceChange": "-94.99999800",
-                  "priceChangePercent": "-95.960",
-                  "weightedAvgPrice": "0.29628482",
-                  "prevClosePrice": "0.10002000",
-                  "lastPrice": "4.00000200",
-                  "lastQty": "200.00000000",
-                  "bidPrice": "4.00000000",
-                  "bidQty": "100.00000000",
-                  "askPrice": "4.00000200",
-                  "askQty": "100.00000000",
-                  "openPrice": "99.00000000",
-                  "highPrice": "100.00000000",
-                  "lowPrice": "0.10000000",
-                  "volume": "8913.30000000",
-                  "quoteVolume": "15.30000000",
-                  "openTime": 1499783499040,
-                  "closeTime": 1499869899040,
-                  "firstId": 28385,
-                  "lastId": 28460,
-                  "count": 76
-                }
+                [
+                  {
+                    "symbol": "BNBBTC",
+                    "priceChange": "-94.99999800",
+                    "priceChangePercent": "-95.960",
+                    "weightedAvgPrice": "0.29628482",
+                    "prevClosePrice": "0.10002000",
+                    "lastPrice": "4.00000200",
+                    "lastQty": "200.00000000",
+                    "bidPrice": "4.00000000",
+                    "bidQty": "100.00000000",
+                    "askPrice": "4.00000200",
+                    "askQty": "100.00000000",
+                    "openPrice": "99.00000000",
+                    "highPrice": "100.00000000",
+                    "lowPrice": "0.10000000",
+                    "volume": "8913.30000000",
+                    "quoteVolume": "15.30000000",
+                    "openTime": 1499783499040,
+                    "closeTime": 1499869899040,
+                    "firstId": 28385,
+                    "lastId": 28460,
+                    "count": 76
+                  }
+                ]
                 """.trimIndent()
                 )
                 .setHeader("Content-Type", "application/json")
         )
 
-        val result: FuturesTicker24h = client.get24hTicker(symbol = "BNBBTC")
+        val result: List<FuturesTicker24h> = client.getAll24hTickers()
 
         val recordedRequest = server.takeRequest()
         println("[BinanceFuturesMarketClientTest] 24h ticker request method=${recordedRequest.method}, path=${recordedRequest.path}")
         println("[BinanceFuturesMarketClientTest] 24h ticker response body mapped=$result")
 
-        assertThat(result.symbol).isEqualTo("BNBBTC")
-        assertThat(result.lastPrice).isEqualTo(BigDecimal("4.00000200"))
-        assertThat(result.volume).isEqualTo(BigDecimal("8913.30000000"))
+        assertThat(result).hasSize(1)
+        assertThat(result[0].symbol).isEqualTo("BNBBTC")
+        assertThat(result[0].lastPrice).isEqualTo(BigDecimal("4.00000200"))
+        assertThat(result[0].volume).isEqualTo(BigDecimal("8913.30000000"))
     }
 
     @Test
