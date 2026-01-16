@@ -1,5 +1,7 @@
 package me.hajoo.cryptopediaserver.auth.application
 
+import me.hajoo.cryptopediaserver.core.common.exception.BusinessException
+import me.hajoo.cryptopediaserver.core.common.exception.ErrorCode
 import me.hajoo.cryptopediaserver.core.domain.SignupRequest
 import me.hajoo.cryptopediaserver.core.domain.SignupRequestRepository
 import me.hajoo.cryptopediaserver.core.domain.UserRepository
@@ -22,11 +24,11 @@ class SignupRequestService(
         comment: String?,
     ): Long {
         if (userRepository.existsByEmail(email)) {
-            throw IllegalArgumentException("이미 사용 중인 이메일입니다.")
+            throw BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS)
         }
 
         if (signupRequestRepository.existsByEmail(email)) {
-            throw IllegalArgumentException("이미 가입 신청이 진행 중인 이메일입니다.")
+            throw BusinessException(ErrorCode.SIGNUP_REQUEST_ALREADY_EXISTS)
         }
 
         val signupRequest = SignupRequest(

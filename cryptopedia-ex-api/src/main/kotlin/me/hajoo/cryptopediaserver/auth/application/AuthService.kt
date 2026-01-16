@@ -1,6 +1,9 @@
 package me.hajoo.cryptopediaserver.auth.application
 
 import java.time.LocalDateTime
+import me.hajoo.cryptopediaserver.auth.application.AuthTokens
+import me.hajoo.cryptopediaserver.core.common.exception.BusinessException
+import me.hajoo.cryptopediaserver.core.common.exception.ErrorCode
 import me.hajoo.cryptopediaserver.core.domain.RefreshToken
 import me.hajoo.cryptopediaserver.core.domain.RefreshTokenRepository
 import me.hajoo.cryptopediaserver.core.security.JwtTokenProvider
@@ -22,10 +25,10 @@ class AuthService(
     @Transactional
     fun signup(email: String, rawPassword: String, nickname: String): Long {
         if (userRepository.existsByEmail(email)) {
-            throw IllegalArgumentException("Email already in use")
+            throw BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS)
         }
         if (userRepository.existsByNickname(nickname)) {
-            throw IllegalArgumentException("Nickname already in use")
+            throw BusinessException(ErrorCode.NICKNAME_ALREADY_EXISTS)
         }
 
         val encodedPassword = passwordEncoder.encode(rawPassword)
@@ -41,10 +44,10 @@ class AuthService(
     @Transactional
     fun login(email: String, rawPassword: String): AuthTokens {
         val user = userRepository.findByEmail(email)
-            ?: throw IllegalArgumentException("Invalid credentials")
+            ?: throw BusinessException(ErrorCode.INVALID_CREDENTIALS)
 
         if (!passwordEncoder.matches(rawPassword, user.password)) {
-            throw IllegalArgumentException("Invalid credentials")
+            throw BusinessException(ErrorCode.INVALID_CREDENTIALS)
         }
 
         refreshTokenRepository.deleteByUser(user)
@@ -67,10 +70,10 @@ class AuthService(
     @Transactional
     fun refresh(refreshToken: String): AuthTokens {
         val stored = refreshTokenRepository.findByToken(refreshToken)
-            ?: throw IllegalArgumentException("Invalid refresh token")
+            ?: throw BusinessException(ErrorCode.INVALID_CREDENTIALS)
 
         if (stored.revoked || stored.expiredAt.isBefore(LocalDateTime.now())) {
-            throw IllegalArgumentException("Expired refresh token")
+            throw BusinessException(ErrorCode.INVALID_CREDENTIALS)
         }
 
         val user = stored.user
@@ -82,7 +85,7 @@ class AuthService(
     @Transactional
     fun logout(userId: Long) {
         val user = userRepository.findById(userId)
-            .orElseThrow { IllegalArgumentException("User not found") }
+            .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
 
         refreshTokenRepository.deleteByUser(user)
     }

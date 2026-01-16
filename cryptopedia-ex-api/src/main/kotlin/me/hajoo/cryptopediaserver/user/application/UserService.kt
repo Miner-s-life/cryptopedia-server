@@ -1,5 +1,7 @@
 package me.hajoo.cryptopediaserver.user.application
 
+import me.hajoo.cryptopediaserver.core.common.exception.BusinessException
+import me.hajoo.cryptopediaserver.core.common.exception.ErrorCode
 import me.hajoo.cryptopediaserver.core.domain.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -12,7 +14,7 @@ class UserService(
     @Transactional(readOnly = true)
     fun getMe(userId: Long): MeResponse {
         val user = userRepository.findById(userId)
-            .orElseThrow { IllegalArgumentException("User not found") }
+            .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
 
         return MeResponse(
             id = user.id,
