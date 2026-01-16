@@ -43,18 +43,17 @@ class SecurityConfig(
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(
-                        "/auth/signup",
-                        "/auth/login",
-                        "/auth/token/refresh",
+                        "/api/v1/auth/signup",
+                        "/api/v1/auth/signup-request",
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/token/refresh",
 
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**",
 
                         "/actuator/health",
-                        "/actuator/info",
-
-                        "/api/v1/market/**"
+                        "/actuator/info"
                     ).permitAll()
                     .anyRequest().authenticated()
             }
