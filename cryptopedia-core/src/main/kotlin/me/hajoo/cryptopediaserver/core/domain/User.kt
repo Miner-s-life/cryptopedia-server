@@ -15,22 +15,23 @@ import java.time.LocalDateTime
 class User(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     val id: Long = 0,
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     val email: String,
 
-    @Column(nullable = false, length = 255)
+    @Column(name = "password", nullable = false, length = 255)
     var password: String,
 
-    @Column(nullable = false, unique = true, length = 50)
+    @Column(name = "nickname", nullable = false, unique = true, length = 50)
     var nickname: String,
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(name = "role", nullable = false, length = 20)
     val role: UserRole = UserRole.USER,
 
-    @Column
+    @Column(name = "last_login_at")
     var lastLoginAt: LocalDateTime? = null,
 ) : BaseTimeEntity() {
     fun updateLoginAt(now: LocalDateTime = LocalDateTime.now()) {

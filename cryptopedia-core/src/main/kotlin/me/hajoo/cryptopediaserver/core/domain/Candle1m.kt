@@ -14,35 +14,36 @@ import java.time.LocalDateTime
 class Candle1m(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     val id: Long? = null,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "exchange", nullable = false, length = 20)
     val exchange: String,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "symbol", nullable = false, length = 20)
     val symbol: String,
 
-    @Column(nullable = false)
+    @Column(name = "open_time", nullable = false)
     val openTime: LocalDateTime,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "open_price", nullable = false, precision = 32, scale = 8)
     val openPrice: BigDecimal,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "high_price", nullable = false, precision = 32, scale = 8)
     val highPrice: BigDecimal,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "low_price", nullable = false, precision = 32, scale = 8)
     val lowPrice: BigDecimal,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "close_price", nullable = false, precision = 32, scale = 8)
     val closePrice: BigDecimal,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "volume", nullable = false, precision = 32, scale = 8)
     val volume: BigDecimal, // Base Asset Volume
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "quote_volume", nullable = false, precision = 32, scale = 8)
     val quoteVolume: BigDecimal, // Quote Asset Volume
 
-    @Column(nullable = false)
+    @Column(name = "trades", nullable = false)
     val trades: Long
 )

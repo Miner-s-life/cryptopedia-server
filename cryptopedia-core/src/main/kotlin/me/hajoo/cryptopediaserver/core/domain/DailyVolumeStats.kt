@@ -14,26 +14,27 @@ import java.time.LocalDate
 class DailyVolumeStats(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     val id: Long? = null,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "exchange", nullable = false, length = 20)
     val exchange: String,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "symbol", nullable = false, length = 20)
     val symbol: String,
 
-    @Column(nullable = false)
+    @Column(name = "date", nullable = false)
     val date: LocalDate,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "volume_sum", nullable = false, precision = 32, scale = 8)
     val volumeSum: BigDecimal,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "quote_volume_sum", nullable = false, precision = 32, scale = 8)
     val quoteVolumeSum: BigDecimal,
     
-    @Column(nullable = true, precision = 32, scale = 8)
+    @Column(name = "volume_ma_7d", nullable = true, precision = 32, scale = 8)
     val volumeMa7d: BigDecimal? = null, // Moving Average 7 Days
 
-    @Column(nullable = true, precision = 32, scale = 8)
+    @Column(name = "volume_ma_30d", nullable = true, precision = 32, scale = 8)
     val volumeMa30d: BigDecimal? = null
 )

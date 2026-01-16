@@ -16,18 +16,19 @@ import java.time.LocalDateTime
 class RefreshToken(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     val id: Long = 0,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     val user: User,
 
-    @Column(nullable = false, unique = true, length = 512)
+    @Column(name = "token", nullable = false, unique = true, length = 512)
     val token: String,
 
-    @Column(nullable = false)
+    @Column(name = "expired_at", nullable = false)
     val expiredAt: LocalDateTime,
 
-    @Column(nullable = false)
+    @Column(name = "revoked", nullable = false)
     var revoked: Boolean = false,
 ) : BaseTimeEntity()

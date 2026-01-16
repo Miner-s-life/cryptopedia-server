@@ -14,26 +14,27 @@ import java.time.LocalDateTime
 class Ticker24hLatest(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     val id: Long? = null,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "exchange", nullable = false, length = 20)
     val exchange: String,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "symbol", nullable = false, length = 20)
     val symbol: String,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "last_price", nullable = false, precision = 32, scale = 8)
     var lastPrice: BigDecimal,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "price_change_percent", nullable = false, precision = 32, scale = 8)
     var priceChangePercent: BigDecimal,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "volume24h", nullable = false, precision = 32, scale = 8)
     var volume24h: BigDecimal,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "quote_volume24h", nullable = false, precision = 32, scale = 8)
     var quoteVolume24h: BigDecimal,
 
-    @Column(nullable = false)
+    @Column(name = "last_updated", nullable = false)
     var lastUpdated: LocalDateTime = LocalDateTime.now()
 )

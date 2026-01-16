@@ -13,21 +13,22 @@ import me.hajoo.cryptopediaserver.core.domain.BaseTimeEntity
 class Symbol(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     val id: Long = 0,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "exchange", nullable = false, length = 20)
     val exchange: String, // BINANCE
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "symbol", nullable = false, length = 20)
     val symbol: String, // BTCUSDT
 
-    @Column(nullable = false, length = 10)
+    @Column(name = "base_asset", nullable = false, length = 10)
     val baseAsset: String, // BTC
 
-    @Column(nullable = false, length = 10)
+    @Column(name = "quote_asset", nullable = false, length = 10)
     val quoteAsset: String, // USDT
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 20)
     var status: String, // TRADING, BREAK
 
 ) : BaseTimeEntity()

@@ -14,23 +14,24 @@ import java.time.LocalDateTime
 class SymbolMetrics(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     val id: Long? = null,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "exchange", nullable = false, length = 20)
     val exchange: String,
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "symbol", nullable = false, length = 20)
     val symbol: String,
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "rvol", nullable = false, precision = 32, scale = 8)
     var rvol: BigDecimal, // Relative Volume (Current / Average)
 
-    @Column(nullable = false, precision = 32, scale = 8)
+    @Column(name = "price_change_percent24h", nullable = false, precision = 32, scale = 8)
     var priceChangePercent24h: BigDecimal,
     
-    @Column(nullable = false)
+    @Column(name = "is_surging", nullable = false)
     var isSurging: Boolean = false, // Simple flag for high RVOL + Price Up
 
-    @Column(nullable = false)
+    @Column(name = "last_updated", nullable = false)
     var lastUpdated: LocalDateTime = LocalDateTime.now()
 )

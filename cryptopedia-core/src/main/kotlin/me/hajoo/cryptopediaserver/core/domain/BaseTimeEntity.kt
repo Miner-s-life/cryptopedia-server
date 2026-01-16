@@ -6,10 +6,10 @@ import java.time.LocalDateTime
 
 @MappedSuperclass
 abstract class BaseTimeEntity(
-    @Column(nullable = false)
+    @Column(name = "created_at", nullable = false)
     val createdAt: LocalDateTime = LocalDateTime.now(),
 
-    @Column(nullable = false)
+    @Column(name = "updated_at", nullable = false)
     var updatedAt: LocalDateTime = LocalDateTime.now(),
 ) {
     fun touch(now: LocalDateTime = LocalDateTime.now()) {
