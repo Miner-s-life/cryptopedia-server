@@ -43,3 +43,6 @@ out/
 cryptopedia-ex-batch/README.md
 cryptopedia-ex-batch/DESIGN.md
 cryptopedia-ex-batch/ANALYSIS.md
+
+# Global Design Docs
+FRONTEND_DESIGN_GUIDE.md

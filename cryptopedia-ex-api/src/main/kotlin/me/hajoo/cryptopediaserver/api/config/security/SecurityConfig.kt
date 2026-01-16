@@ -36,7 +36,9 @@ class SecurityConfig(
                         "/swagger-ui/**",
 
                         "/actuator/health",
-                        "/actuator/info"
+                        "/actuator/info",
+
+                        "/api/v1/market/**"
                     ).permitAll()
                     .anyRequest().authenticated()
             }
