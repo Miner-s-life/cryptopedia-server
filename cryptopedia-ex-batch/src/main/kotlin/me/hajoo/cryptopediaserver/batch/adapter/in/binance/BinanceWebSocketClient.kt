@@ -6,6 +6,7 @@ import me.hajoo.cryptopediaserver.batch.application.service.MarketDataIngestionS
 import okhttp3.*
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import jakarta.annotation.PreDestroy
 import java.util.concurrent.TimeUnit
 
 @Component
@@ -22,6 +23,7 @@ class BinanceWebSocketClient(
     private var webSocket: WebSocket? = null
     private val baseUrl = "wss://stream.binance.com:9443/stream"
     private var isConnected = false
+    private var isShuttingDown = false
 
     fun connect(symbols: List<String>) {
         val request = Request.Builder()
@@ -76,6 +78,8 @@ class BinanceWebSocketClient(
     }
 
     override fun onMessage(webSocket: WebSocket, text: String) {
+        if (isShuttingDown) return
+
         try {
             val node = objectMapper.readTree(text)
             if (node.has("data")) {
@@ -130,5 +134,15 @@ class BinanceWebSocketClient(
             volume24h = node.get("v").asText().toBigDecimal(),
             quoteVolume24h = node.get("q").asText().toBigDecimal()
         )
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        logger.info("Shutting down Binance WebSocket Client...")
+        isShuttingDown = true
+        isConnected = false
+        webSocket?.close(1000, "Application shutdown")
+        client.dispatcher.executorService.shutdown()
+        client.connectionPool.evictAll()
     }
 }
