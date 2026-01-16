@@ -12,9 +12,6 @@ class SignupRequest(
     @Column(name = "email", nullable = false, unique = true, length = 255)
     val email: String,
 
-    @Column(name = "password", nullable = false, length = 255)
-    val password: String,
-
     @Column(name = "phone_number", length = 20)
     val phoneNumber: String? = null,
 

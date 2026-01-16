@@ -21,11 +21,10 @@ class AuthController(
 ) {
 
     @PostMapping("/signup-request")
-    @Operation(summary = "가입 신청", description = "이메일, 비밀번호, 핸드폰번호, 코멘트로 가입 신청을 생성합니다.")
+    @Operation(summary = "가입 신청", description = "이메일, 핸드폰번호, 코멘트로 가입 신청을 생성합니다.")
     fun createSignupRequest(@RequestBody request: CreateSignupRequest): ResponseEntity<ApiResponse<Long>> {
         val requestId = signupRequestService.createSignupRequest(
             email = request.email,
-            rawPassword = request.password,
             phoneNumber = request.phoneNumber,
             comment = request.comment,
         )
@@ -82,7 +81,6 @@ data class SignupResponse(
 
 data class CreateSignupRequest(
     val email: String,
-    val password: String,
     val phoneNumber: String? = null,
     val comment: String? = null,
 )

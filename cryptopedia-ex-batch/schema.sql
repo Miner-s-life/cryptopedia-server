@@ -93,7 +93,6 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 CREATE TABLE IF NOT EXISTS signup_requests (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
     phone_number VARCHAR(20),
     comment TEXT,
     status VARCHAR(20) NOT NULL,
