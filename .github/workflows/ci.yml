@@ -87,7 +87,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Update cryptopedia-infra image patch (CD)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: false
         env:
           INFRA_REPO: Miner-s-life/cryptopedia-infra
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
