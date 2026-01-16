@@ -18,7 +18,7 @@ class SymbolSyncService(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    @Scheduled(fixedRate = 3600000) // 1 hour
+    @Scheduled(fixedRate = 300000) // 5 minutes
     @Transactional
     fun syncTopVolumeSymbols() {
         logger.info("Starting Symbol Sync Job...")
