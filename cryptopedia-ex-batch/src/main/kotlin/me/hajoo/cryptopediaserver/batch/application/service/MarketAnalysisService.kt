@@ -1,6 +1,7 @@
 package me.hajoo.cryptopediaserver.batch.application.service
 
 import me.hajoo.cryptopediaserver.batch.adapter.out.binance.BinanceRestClient
+import me.hajoo.cryptopediaserver.core.client.binance.BinanceFuturesMarketClient
 import me.hajoo.cryptopediaserver.core.domain.Candle1mRepository
 import me.hajoo.cryptopediaserver.core.domain.DailyVolumeStats
 import me.hajoo.cryptopediaserver.core.domain.DailyVolumeStatsRepository
@@ -15,6 +16,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 @Service
 class MarketAnalysisService(
@@ -22,7 +24,7 @@ class MarketAnalysisService(
     private val candle1mRepository: Candle1mRepository,
     private val dailyVolumeStatsRepository: DailyVolumeStatsRepository,
     private val symbolMetricsRepository: SymbolMetricsRepository,
-    private val binanceRestClient: BinanceRestClient,
+    private val binanceFuturesMarketClient: BinanceFuturesMarketClient,
     private val redisTemplate: RedisTemplate<String, String>,
     private val alertService: AlertService
 ) {
@@ -132,7 +134,7 @@ class MarketAnalysisService(
     fun updateRealTimeMetrics() {
         val today = LocalDate.now(java.time.ZoneId.of("UTC"))
         val yesterday = today.minusDays(1)
-        val now = java.time.LocalDateTime.now(java.time.ZoneId.of("UTC"))
+        val now = LocalDateTime.now(java.time.ZoneId.of("UTC"))
         val startOfDay = today.atStartOfDay()
 
         val symbols = symbolRepository.findAllByStatus("TRADING")
@@ -232,7 +234,7 @@ class MarketAnalysisService(
         }
 
         logger.info("Backfilling history for $symbol...")
-        val klines = binanceRestClient.getDailyKlines(symbol, 60) // Fetch 60 days to have enough for MA30
+        val klines = binanceFuturesMarketClient.getKlines(symbol, "1d", limit = 60) // Fetch 60 days to have enough for MA30
         if (klines.isEmpty()) return
 
         // Sort by date ascending to calculate MAs properly
@@ -242,7 +244,9 @@ class MarketAnalysisService(
         val statsList = mutableListOf<DailyVolumeStats>()
 
         sortedKlines.forEach { kline ->
-            val date = java.time.LocalDateTime.ofInstant(Instant.ofEpochMilli(kline.openTime), java.time.ZoneId.of("UTC")).toLocalDate()
+            val date = LocalDateTime.ofInstant(Instant.ofEpochMilli(kline.openTime), java.time.ZoneId.of("UTC")).toLocalDate()
+            val volume = kline.volume
+            val quoteVolume = kline.quoteAssetVolume
             
             // Calculate MA based on previous stats in statsList
             // MA7
@@ -254,26 +258,25 @@ class MarketAnalysisService(
                 // Standard MA: Average of last N candles (including current if it's the reference point? No, usually Close Price MA includes current close. Volume MA includes current volume)
                 // Let's include current volume in the window if we treat this data point as "closed day".
                 
-                val buffer = last7.map { it.volumeSum } + kline.volume
-                // If we want MA7 of *this* day, it's average of (d-6 ... d). 
+                val buffer = last7.map { it.volumeSum } + volume
                 val window = buffer.takeLast(7)
                 window.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(window.size), 8, RoundingMode.HALF_UP)
-            } else kline.volume // Fallback?
+            } else volume // Fallback?
 
             // MA30
             val last30 = statsList.takeLast(30)
             val ma30 = if (last30.isNotEmpty()) {
-                val buffer = last30.map { it.volumeSum } + kline.volume
+                val buffer = last30.map { it.volumeSum } + volume
                 val window = buffer.takeLast(30)
                 window.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(window.size), 8, RoundingMode.HALF_UP)
-            } else kline.volume
+            } else volume
 
             val stats = DailyVolumeStats(
                 exchange = "BINANCE",
                 symbol = symbol,
                 date = date,
-                volumeSum = kline.volume,
-                quoteVolumeSum = kline.quoteVolume,
+                volumeSum = volume,
+                quoteVolumeSum = quoteVolume,
                 volumeMa7d = ma7,
                 volumeMa30d = ma30
             )
