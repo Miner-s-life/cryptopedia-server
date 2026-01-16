@@ -88,3 +88,15 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     updated_at DATETIME(6) NOT NULL,
     CONSTRAINT fk_refresh_tokens_user_id FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 8. Signup Requests Table
+CREATE TABLE IF NOT EXISTS signup_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(20),
+    comment TEXT,
+    status VARCHAR(20) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
