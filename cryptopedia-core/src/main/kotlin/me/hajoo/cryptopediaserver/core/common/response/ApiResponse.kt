@@ -6,8 +6,7 @@ import java.time.LocalDateTime
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class ApiResponse<T>(
     val data: T? = null,
-    val error: ApiError? = null,
-    val timestamp: LocalDateTime = LocalDateTime.now()
+    val error: ApiError? = null
 ) {
     companion object {
         fun <T> success(data: T? = null): ApiResponse<T> {
