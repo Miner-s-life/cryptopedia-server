@@ -6,7 +6,7 @@ spring:
     name: cryptopedia-api
 
   datasource:
-    url: jdbc:mysql://localhost:3306/cryptopedia?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&rewriteBatchedStatements=true
+    url: jdbc:mysql://localhost:3306/cryptopedia?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&rewriteBatchedStatements=true
     username: root
     password: password
     driver-class-name: com.mysql.cj.jdbc.Driver
