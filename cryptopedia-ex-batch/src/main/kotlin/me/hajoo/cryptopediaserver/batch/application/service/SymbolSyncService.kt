@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
@@ -41,7 +42,7 @@ class SymbolSyncService(
 
             val topSymbols = allTickers
                 .filter { it.symbol.endsWith("USDT") }
-                .sortedByDescending { it.quoteVolume ?: java.math.BigDecimal.ZERO }
+                .sortedByDescending { it.quoteVolume ?: BigDecimal.ZERO }
                 .take(100)
                 .map { it.symbol }
 

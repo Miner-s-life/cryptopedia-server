@@ -27,12 +27,8 @@ class DataCollectionInitializer(
         val activeSymbols = symbolRepository.findAllByStatus("TRADING").map { it.symbol }
         
         logger.info("Database total symbols: $allSymbolsCount, Active symbols: ${activeSymbols.size}")
-
-        if (activeSymbols.isNotEmpty()) {
-            logger.info("Connecting WebSocket for ${activeSymbols.size} symbols")
-            binanceWebSocketClient.connect(activeSymbols)
-        } else {
-            logger.warn("No active symbols found to collect.")
-        }
+        
+        // Always connect, even if empty, so that subsequent syncs can subscribe
+        binanceWebSocketClient.connect(activeSymbols)
     }
 }
