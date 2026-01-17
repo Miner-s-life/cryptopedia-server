@@ -130,9 +130,9 @@ class MarketAnalysisService(
 
     @Transactional
     fun updateRealTimeMetrics() {
-        val today = LocalDate.now(java.time.ZoneId.of("UTC"))
+        val today = LocalDate.now(ZoneId.of("UTC"))
         val yesterday = today.minusDays(1)
-        val now = LocalDateTime.now(java.time.ZoneId.of("UTC"))
+        val now = LocalDateTime.now(ZoneId.of("UTC"))
         val startOfDay = today.atStartOfDay()
 
         val symbols = symbolRepository.findAllByStatus("TRADING")
