@@ -15,4 +15,6 @@ interface Candle1mRepository : JpaRepository<Candle1m, Long> {
     fun getVolumeSum(exchange: String, symbol: String, start: LocalDateTime, end: LocalDateTime): BigDecimal?
 
     fun findTop100ByExchangeAndSymbolOrderByOpenTimeDesc(exchange: String, symbol: String): List<Candle1m>
+
+    fun existsByExchangeAndSymbolAndOpenTime(exchange: String, symbol: String, openTime: LocalDateTime): Boolean
 }

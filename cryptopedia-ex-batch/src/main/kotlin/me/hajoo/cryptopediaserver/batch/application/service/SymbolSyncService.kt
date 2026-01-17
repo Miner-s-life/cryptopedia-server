@@ -56,7 +56,7 @@ class SymbolSyncService(
                             try {
                                 logger.info("Found new top symbol: $symbolStr")
                                 saveNewSymbol(symbolStr)
-                                marketAnalysisService.backfillHistory(symbolStr)
+                                marketAnalysisService.backfillHistory("BINANCE", symbolStr)
                                 newSymbols.add(symbolStr)
                             } catch (e: org.springframework.dao.DataIntegrityViolationException) {
                                 logger.warn("Symbol $symbolStr was already inserted by another thread")

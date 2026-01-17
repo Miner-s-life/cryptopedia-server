@@ -1,22 +1,19 @@
 package me.hajoo.cryptopediaserver.batch.application.service
 
-import me.hajoo.cryptopediaserver.batch.adapter.out.binance.BinanceRestClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import me.hajoo.cryptopediaserver.core.client.binance.BinanceFuturesMarketClient
-import me.hajoo.cryptopediaserver.core.domain.Candle1mRepository
-import me.hajoo.cryptopediaserver.core.domain.DailyVolumeStats
-import me.hajoo.cryptopediaserver.core.domain.DailyVolumeStatsRepository
-import me.hajoo.cryptopediaserver.core.domain.SymbolMetrics
-import me.hajoo.cryptopediaserver.core.domain.SymbolMetricsRepository
-import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
+import me.hajoo.cryptopediaserver.core.domain.*
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.RedisTemplate
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
+import java.time.*
 
 @Service
 class MarketAnalysisService(
@@ -26,7 +23,8 @@ class MarketAnalysisService(
     private val symbolMetricsRepository: SymbolMetricsRepository,
     private val binanceFuturesMarketClient: BinanceFuturesMarketClient,
     private val redisTemplate: RedisTemplate<String, String>,
-    private val alertService: AlertService
+    private val alertService: AlertService,
+    private val jdbcTemplate: JdbcTemplate
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -138,6 +136,9 @@ class MarketAnalysisService(
         val startOfDay = today.atStartOfDay()
 
         val symbols = symbolRepository.findAllByStatus("TRADING")
+        
+        // 0. Ensure we have data for today (Backfill if missing) - Batch optimized
+        backfillTodayCandlesBulk(symbols)
 
         symbols.forEach { symbol ->
             try {
@@ -163,7 +164,7 @@ class MarketAnalysisService(
                 // ExpectedVol = MA_30D * (ElapsedMinutes / 1440)
                 // RVOL = CurrentVol / ExpectedVol
                 
-                val elapsedMinutes = java.time.Duration.between(startOfDay, now).toMinutes().coerceAtLeast(1)
+                val elapsedMinutes = Duration.between(startOfDay, now).toMinutes().coerceAtLeast(1)
                 val dailyMa = stats.volumeMa30d!!
                 
                 // Avoid division by zero
@@ -221,77 +222,144 @@ class MarketAnalysisService(
             }
         """.trimIndent()
         
-        redisTemplate.opsForValue().set(key, value, java.time.Duration.ofMinutes(5))
+        redisTemplate.opsForValue().set(key, value, Duration.ofMinutes(5))
     }
 
     @Transactional
-    fun backfillHistory(symbol: String) {
+    fun backfillTodayCandlesBulk(symbols: List<Symbol>) {
+        val now = LocalDateTime.now(ZoneId.of("UTC"))
+        val startOfDay = now.toLocalDate().atStartOfDay()
+        
+        // Identify symbols that need backfill
+        val symbolsToBackfill = symbols.filter {
+            !candle1mRepository.existsByExchangeAndSymbolAndOpenTime(it.exchange, it.symbol, startOfDay)
+        }
+        
+        if (symbolsToBackfill.isEmpty()) return
+
+        logger.info("Starting bulk backfill for ${symbolsToBackfill.size} symbols from $startOfDay")
+
+        val allCandlesToSave = runBlocking {
+            symbolsToBackfill.chunked(10).flatMap { chunk ->
+                chunk.map { symbol ->
+                    async(Dispatchers.IO) {
+                        fetchTodayCandles(symbol, startOfDay)
+                    }
+                }.awaitAll().flatten()
+            }
+        }
+
+        if (allCandlesToSave.isNotEmpty()) {
+            batchInsertCandles(allCandlesToSave)
+            logger.info("Inserted total ${allCandlesToSave.size} candles via global bulk insert")
+        }
+    }
+
+    private fun fetchTodayCandles(symbol: Symbol, startOfDay: LocalDateTime): List<me.hajoo.cryptopediaserver.core.domain.Candle1m> {
+        return try {
+            when (symbol.exchange) {
+                "BINANCE" -> {
+                    val startTime = startOfDay.atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+                    val klines = binanceFuturesMarketClient.getKlines(symbol.symbol, "1m", startTime = startTime, limit = 1500)
+                    klines.map { k ->
+                        Candle1m(
+                            exchange = symbol.exchange,
+                            symbol = symbol.symbol,
+                            openTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(k.openTime), ZoneId.of("UTC")),
+                            openPrice = k.openPrice,
+                            highPrice = k.highPrice,
+                            lowPrice = k.lowPrice,
+                            closePrice = k.closePrice,
+                            volume = k.volume,
+                            quoteVolume = k.quoteAssetVolume,
+                            trades = k.numberOfTrades
+                        )
+                    }
+                }
+                "UPBIT" -> {
+                    // ... Upbit logic ...
+                    emptyList()
+                }
+                else -> emptyList()
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to fetch candles for ${symbol.exchange}:${symbol.symbol}", e)
+            emptyList()
+        }
+    }
+
+    private fun batchInsertCandles(candles: List<Candle1m>) {
+        if (candles.isEmpty()) return
+
+        val sql = """
+            INSERT IGNORE INTO candles_1m (exchange, symbol, open_time, open_price, high_price, low_price, close_price, volume, quote_volume, trades)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """.trimIndent()
+
+        jdbcTemplate.batchUpdate(sql, candles, 1000) { ps, candle ->
+            ps.setString(1, candle.exchange)
+            ps.setString(2, candle.symbol)
+            ps.setTimestamp(3, java.sql.Timestamp.valueOf(candle.openTime))
+            ps.setBigDecimal(4, candle.openPrice)
+            ps.setBigDecimal(5, candle.highPrice)
+            ps.setBigDecimal(6, candle.lowPrice)
+            ps.setBigDecimal(7, candle.closePrice)
+            ps.setBigDecimal(8, candle.volume)
+            ps.setBigDecimal(9, candle.quoteVolume)
+            ps.setLong(10, candle.trades)
+        }
+    }
+
+    @Transactional
+    fun backfillHistory(exchange: String, symbol: String) {
         // Double check if we already have stats to avoid spamming API on every restart
-        val today = LocalDate.now(java.time.ZoneId.of("UTC"))
+        val today = LocalDate.now(ZoneId.of("UTC"))
         val yesterday = today.minusDays(1)
-        if (dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate("BINANCE", symbol, yesterday) != null) {
+        if (dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate(exchange, symbol, yesterday) != null) {
             return
         }
 
-        logger.info("Backfilling history for $symbol...")
-        val klines = binanceFuturesMarketClient.getKlines(symbol, "1d", limit = 60) // Fetch 60 days to have enough for MA30
-        if (klines.isEmpty()) return
-
-        // Sort by date ascending to calculate MAs properly
-        val sortedKlines = klines.sortedBy { it.openTime }
+        logger.info("Backfilling history for $exchange:$symbol...")
         
-        // In-memory list to help calc MAs
         val statsList = mutableListOf<DailyVolumeStats>()
 
-        sortedKlines.forEach { kline ->
-            val date = LocalDateTime.ofInstant(Instant.ofEpochMilli(kline.openTime), java.time.ZoneId.of("UTC")).toLocalDate()
-            val volume = kline.volume
-            val quoteVolume = kline.quoteAssetVolume
-            
-            // Calculate MA based on previous stats in statsList
-            // MA7
-            val last7 = statsList.takeLast(7)
-            val ma7 = if (last7.isNotEmpty()) {
-                val sum = last7.fold(BigDecimal.ZERO) { acc, s -> acc.add(s.volumeSum) }
-                // Include current? Usually MA is based on closed candles. 
-                // Since 'kline' is a finished daily candle (mostly), we can include it or just strictly use past N.
-                // Standard MA: Average of last N candles (including current if it's the reference point? No, usually Close Price MA includes current close. Volume MA includes current volume)
-                // Let's include current volume in the window if we treat this data point as "closed day".
-                
-                val buffer = last7.map { it.volumeSum } + volume
-                val window = buffer.takeLast(7)
-                window.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(window.size), 8, RoundingMode.HALF_UP)
-            } else volume // Fallback?
+        when (exchange) {
+            "BINANCE" -> {
+                val klines = binanceFuturesMarketClient.getKlines(symbol, "1d", limit = 60)
+                if (klines.isEmpty()) return
 
-            // MA30
-            val last30 = statsList.takeLast(30)
-            val ma30 = if (last30.isNotEmpty()) {
-                val buffer = last30.map { it.volumeSum } + volume
-                val window = buffer.takeLast(30)
-                window.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(window.size), 8, RoundingMode.HALF_UP)
-            } else volume
+                val sortedKlines = klines.sortedBy { it.openTime }
+                sortedKlines.forEach { kline ->
+                    val date = LocalDateTime.ofInstant(Instant.ofEpochMilli(kline.openTime), ZoneId.of("UTC")).toLocalDate()
+                    val volume = kline.volume
+                    val quoteVolume = kline.quoteAssetVolume
+                    
+                    val maWindow7 = statsList.takeLast(6).map { it.volumeSum } + volume
+                    val ma7 = maWindow7.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(maWindow7.size), 8, RoundingMode.HALF_UP)
 
-            val stats = DailyVolumeStats(
-                exchange = "BINANCE",
-                symbol = symbol,
-                date = date,
-                volumeSum = volume,
-                quoteVolumeSum = quoteVolume,
-                volumeMa7d = ma7,
-                volumeMa30d = ma30
-            )
-            
-            // Save to list and DB
-            statsList.add(stats)
-            
-            // Upsert to DB
-            val existing = dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate("BINANCE", symbol, date)
-            if (existing != null) {
-                // Skip or update? Skip for backfill speed usually
-            } else {
-                dailyVolumeStatsRepository.save(stats)
+                    val maWindow30 = statsList.takeLast(29).map { it.volumeSum } + volume
+                    val ma30 = maWindow30.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(maWindow30.size), 8, RoundingMode.HALF_UP)
+
+                    val stats = DailyVolumeStats(
+                        exchange = exchange,
+                        symbol = symbol,
+                        date = date,
+                        volumeSum = volume,
+                        quoteVolumeSum = quoteVolume,
+                        volumeMa7d = ma7,
+                        volumeMa30d = ma30
+                    )
+                    statsList.add(stats)
+                    
+                    if (dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate(exchange, symbol, date) == null) {
+                        dailyVolumeStatsRepository.save(stats)
+                    }
+                }
+            }
+            "UPBIT" -> {
+                // Handle Upbit history if needed
             }
         }
-        logger.info("Backfill complete for $symbol: ${statsList.size} days processed.")
+        logger.info("Backfill complete for $exchange:$symbol: ${statsList.size} days processed.")
     }
 }

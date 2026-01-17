@@ -1,24 +1,28 @@
 server:
-  port: 8080
+  port: 7070
 
 spring:
   application:
     name: cryptopedia-batch
 
   datasource:
-    url: jdbc:mysql://localhost:3306/cryptopedia?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+    url: jdbc:mysql://localhost:3306/cryptopedia?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&rewriteBatchedStatements=true
     username: root
     password: password
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
 
 management:
   endpoints:

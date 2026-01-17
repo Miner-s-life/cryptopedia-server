@@ -7,7 +7,7 @@ spring:
       host: redis-master.db.svc.cluster.local
       port: 6379
   datasource:
-    url: jdbc:mysql://mysql.db.svc.cluster.local:3306/cryptopedia?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+    url: jdbc:mysql://mysql.db.svc.cluster.local:3306/cryptopedia?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&rewriteBatchedStatements=true
     username: root
     password: SuperSecretRootPassword123!
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -26,6 +26,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: false
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
 
 logging:
   level:

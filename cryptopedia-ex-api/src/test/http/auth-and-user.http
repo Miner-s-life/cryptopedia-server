@@ -1,5 +1,5 @@
 ### Signup
-POST {{baseUrl}}/auth/signup
+POST {{baseUrl}}/api/v1/auth/signup
 Content-Type: application/json
 
 {
@@ -9,7 +9,7 @@ Content-Type: application/json
 }
 
 ### Login
-POST {{baseUrl}}/auth/login
+POST {{baseUrl}}/api/v1/auth/login
 Content-Type: application/json
 
 {
