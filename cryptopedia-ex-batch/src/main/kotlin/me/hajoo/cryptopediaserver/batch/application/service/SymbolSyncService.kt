@@ -5,9 +5,9 @@ import me.hajoo.cryptopediaserver.core.client.binance.BinanceFuturesMarketClient
 import me.hajoo.cryptopediaserver.core.domain.Symbol
 import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
 import org.slf4j.LoggerFactory
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionTemplate
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
@@ -16,7 +16,7 @@ class SymbolSyncService(
     private val binanceFuturesMarketClient: BinanceFuturesMarketClient,
     private val marketAnalysisService: MarketAnalysisService,
     private val binanceWebSocketClient: BinanceWebSocketClient,
-    private val transactionTemplate: TransactionTemplate
+    private val jdbcTemplate: JdbcTemplate
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val isSyncing = AtomicBoolean(false)
@@ -45,38 +45,46 @@ class SymbolSyncService(
                 .take(100)
                 .map { it.symbol }
 
-            val newSymbols = mutableListOf<String>()
+            val symbolsToInsert = mutableListOf<Symbol>()
+            val symbolsToEnable = mutableListOf<Symbol>()
 
             topSymbols.forEach { symbolStr ->
                 val existing = symbolRepository.findByExchangeAndSymbol("BINANCE", symbolStr)
                 if (existing == null) {
-                    transactionTemplate.execute {
-                        // Double check inside transaction to reduce race window
-                        if (symbolRepository.findByExchangeAndSymbol("BINANCE", symbolStr) == null) {
-                            try {
-                                logger.info("Found new top symbol: $symbolStr")
-                                saveNewSymbol(symbolStr)
-                                marketAnalysisService.backfillHistory("BINANCE", symbolStr)
-                                newSymbols.add(symbolStr)
-                            } catch (e: org.springframework.dao.DataIntegrityViolationException) {
-                                logger.warn("Symbol $symbolStr was already inserted by another thread")
-                            }
-                        }
-                    }
+                    symbolsToInsert.add(
+                        Symbol(
+                            exchange = "BINANCE",
+                            symbol = symbolStr,
+                            baseAsset = symbolStr.replace("USDT", ""),
+                            quoteAsset = "USDT",
+                            status = "TRADING"
+                        )
+                    )
                 } else if (existing.status != "TRADING") {
-                    logger.info("Enabling existing symbol: $symbolStr")
-                    transactionTemplate.execute {
-                        enableSymbol(existing)
-                    }
-                    newSymbols.add(symbolStr)
+                    symbolsToEnable.add(existing)
                 }
             }
 
-            if (newSymbols.isNotEmpty()) {
-                logger.info("Subscribing to ${newSymbols.size} new symbols")
-                binanceWebSocketClient.subscribe(newSymbols)
+            if (symbolsToInsert.isNotEmpty()) {
+                batchInsertSymbols(symbolsToInsert)
+                logger.info("Bulk inserted ${symbolsToInsert.size} new symbols")
             }
-            logger.info("Symbol Sync completed: Top 100 processed, ${newSymbols.size} new symbols added to tracking.")
+
+            if (symbolsToEnable.isNotEmpty()) {
+                batchUpdateSymbolStatus(symbolsToEnable, "TRADING")
+                logger.info("Bulk enabled ${symbolsToEnable.size} existing symbols")
+            }
+
+            val affectedSymbols = (symbolsToInsert + symbolsToEnable)
+            if (affectedSymbols.isNotEmpty()) {
+                // 1. WebSocket Subscription
+                binanceWebSocketClient.subscribe(affectedSymbols.map { it.symbol })
+                
+                // 2. Bulk Backfill
+                marketAnalysisService.backfillTodayCandlesBulk(affectedSymbols)
+            }
+            
+            logger.info("Symbol Sync completed: Top 100 processed, ${affectedSymbols.size} symbols updated/added.")
         } catch (e: Exception) {
             logger.error("Error during symbol sync", e)
         } finally {
@@ -84,20 +92,26 @@ class SymbolSyncService(
         }
     }
 
-    private fun saveNewSymbol(symbolStr: String) {
-        symbolRepository.save(
-            Symbol(
-                exchange = "BINANCE",
-                symbol = symbolStr,
-                baseAsset = symbolStr.replace("USDT", ""),
-                quoteAsset = "USDT",
-                status = "TRADING"
-            )
-        )
+    private fun batchInsertSymbols(symbols: List<Symbol>) {
+        val sql = """
+            INSERT IGNORE INTO symbols (exchange, symbol, base_asset, quote_asset, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+        """.trimIndent()
+
+        jdbcTemplate.batchUpdate(sql, symbols, 100) { ps, s ->
+            ps.setString(1, s.exchange)
+            ps.setString(2, s.symbol)
+            ps.setString(3, s.baseAsset)
+            ps.setString(4, s.quoteAsset)
+            ps.setString(5, s.status)
+        }
     }
 
-    private fun enableSymbol(symbol: Symbol) {
-        symbol.status = "TRADING"
-        symbolRepository.save(symbol)
+    private fun batchUpdateSymbolStatus(symbols: List<Symbol>, status: String) {
+        val sql = "UPDATE symbols SET status = ?, updated_at = NOW() WHERE id = ?"
+        jdbcTemplate.batchUpdate(sql, symbols, 100) { ps, s ->
+            ps.setString(1, status)
+            ps.setLong(2, s.id)
+        }
     }
 }
