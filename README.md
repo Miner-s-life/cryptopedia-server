@@ -60,6 +60,32 @@ graph TD
 - **Documentation**: Springdoc OpenAPI (Swagger)
 - **Build**: Gradle
 
+## 🏗️ Symbol Lifecycle Management
+
+시장 상황(상장 폐지, 거래량 변화)에 따라 수집 대상을 동적으로 관리하여 데이터 무결성을 유지합니다.
+
+### Symbol Status
+| 상태 | 설명 | 데이터 수집 |
+| :--- | :--- | :--- |
+| **TRADING** | 거래량 상위 100위 이내의 활성 심볼 | **진행 (WS/API)** |
+| **BREAK** | 거래소에 존재하나 100위권 밖으로 밀려난 상태 | 중단 (데이터 보존) |
+| **DELISTED** | 거래소에서 제거되었거나 상장 폐지된 상태 | 영구 제외 |
+
+### Sync Workflow
+```mermaid
+stateDiagram-v2
+    [*] --> ExchangeInfo: Every 1 Hour
+    ExchangeInfo --> DELISTED: Not in ExchangeInfo<br/>or Status != TRADING
+    ExchangeInfo --> Ranking: Valid Symbols
+    
+    Ranking --> TRADING: In Top 100 Volume
+    Ranking --> BREAK: Out of Top 100 Volume
+    
+    TRADING --> BREAK: Volume dropped
+    BREAK --> TRADING: Volume surged
+    TRADING --> DELISTED: Delisted from Exchange
+```
+
 ## 📈 RVOL (Relative Volume) Calculation
 
 RVOL은 과거 평균 거래량 대비 현재 거래량의 비율을 나타내며, 시장의 이상 거래 징후를 탐지하는 핵심 지표입니다.

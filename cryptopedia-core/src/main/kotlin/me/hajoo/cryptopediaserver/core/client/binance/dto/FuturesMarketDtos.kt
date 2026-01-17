@@ -93,3 +93,19 @@ data class FuturesBookTicker(
     val askPrice: BigDecimal,
     val askQty: BigDecimal
 )
+
+data class FuturesExchangeInfo(
+    val timezone: String,
+    val serverTime: Long,
+    val symbols: List<FuturesSymbolInfo>
+)
+
+data class FuturesSymbolInfo(
+    val symbol: String,
+    val pair: String,
+    val contractType: String,
+    val status: String,
+    val baseAsset: String,
+    val quoteAsset: String,
+    val marginAsset: String
+)

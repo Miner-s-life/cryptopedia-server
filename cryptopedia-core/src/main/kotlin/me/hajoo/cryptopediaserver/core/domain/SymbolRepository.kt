@@ -7,4 +7,5 @@ import org.springframework.stereotype.Repository
 interface SymbolRepository : JpaRepository<Symbol, Long> {
     fun findByExchangeAndSymbol(exchange: String, symbol: String): Symbol?
     fun findAllByStatus(status: String): List<Symbol>
+    fun findAllByExchange(exchange: String): List<Symbol>
 }

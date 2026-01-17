@@ -2,6 +2,7 @@ package me.hajoo.cryptopediaserver.batch.application.service
 
 import me.hajoo.cryptopediaserver.batch.adapter.`in`.binance.BinanceWebSocketClient
 import me.hajoo.cryptopediaserver.core.client.binance.BinanceFuturesMarketClient
+import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesSymbolInfo
 import me.hajoo.cryptopediaserver.core.domain.Symbol
 import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
 import org.slf4j.LoggerFactory
@@ -21,51 +22,105 @@ class SymbolSyncService(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val isSyncing = AtomicBoolean(false)
+    
+    // Cache for valid symbols from exchangeInfo to be used in ranking sync
+    @Volatile
+    private var validBinanceSymbols: Map<String, FuturesSymbolInfo> = emptyMap()
 
-    @Scheduled(fixedRate = 300000) // 5 minutes
+    @Scheduled(fixedRate = 3600000) // 1 hour - Source of Truth Sync
+    fun syncExchangeInfo() {
+        try {
+            logger.info("Starting ExchangeInfo Sync Job...")
+            val exchangeInfo = binanceFuturesMarketClient.getExchangeInfo()
+            
+            val currentValidSymbols = exchangeInfo.symbols
+                .filter { it.status == "TRADING" && it.contractType == "PERPETUAL" && it.quoteAsset == "USDT" }
+                .associateBy { it.symbol }
+            
+            validBinanceSymbols = currentValidSymbols
+
+            val allExistingSymbols = symbolRepository.findAllByExchange("BINANCE")
+            val symbolsToDelist = allExistingSymbols
+                .filter { s -> !currentValidSymbols.containsKey(s.symbol) && s.status != "DELISTED" }
+
+            if (symbolsToDelist.isNotEmpty()) {
+                batchUpdateSymbolStatus(symbolsToDelist, "DELISTED")
+                logger.info("Delisted ${symbolsToDelist.size} symbols based on exchangeInfo")
+            }
+            logger.info("ExchangeInfo Sync completed. Total valid symbols: ${currentValidSymbols.size}")
+        } catch (e: Exception) {
+            logger.error("Failed to sync exchangeInfo", e)
+        }
+    }
+
+    @Scheduled(fixedRate = 300000) // 5 minutes - Ranking & Status Transition
     fun syncTopVolumeSymbols() {
         if (!isSyncing.compareAndSet(false, true)) {
-            logger.info("Symbol Sync Job is already running, skipping this execution.")
+            logger.info("Symbol Ranking Sync is already running, skipping.")
             return
         }
 
         try {
-            logger.info("Starting Symbol Sync Job...")
+            logger.info("Starting Symbol Ranking Sync...")
+            
+            val validSymbols = validBinanceSymbols
+            if (validSymbols.isEmpty()) {
+                logger.warn("No valid symbols cached from exchangeInfo, skipping ranking sync.")
+                return
+            }
+
+            // 1. Fetch Volume Ranking
             val allTickers = try {
-                val tickers = binanceFuturesMarketClient.getAll24hTickers()
-                logger.info("Fetched ${tickers.size} tickers from Binance")
-                tickers
+                binanceFuturesMarketClient.getAll24hTickers()
             } catch (e: Exception) {
                 logger.error("Failed to fetch tickers", e)
                 return
             }
 
-            val topSymbols = allTickers
-                .filter { it.symbol.endsWith("USDT") }
+            val top100SymbolNames = allTickers
+                .filter { it.symbol.endsWith("USDT") && validSymbols.containsKey(it.symbol) }
                 .sortedByDescending { it.quoteVolume ?: BigDecimal.ZERO }
                 .take(100)
                 .map { it.symbol }
+                .toSet()
 
+            // 2. Process DB Updates
+            val allExistingSymbols = symbolRepository.findAllByExchange("BINANCE")
+            
             val symbolsToInsert = mutableListOf<Symbol>()
-            val symbolsToEnable = mutableListOf<Symbol>()
+            val symbolsToEnable = mutableListOf<Symbol>() // TRADING
+            val symbolsToPause = mutableListOf<Symbol>()  // BREAK
 
-            topSymbols.forEach { symbolStr ->
-                val existing = symbolRepository.findByExchangeAndSymbol("BINANCE", symbolStr)
-                if (existing == null) {
-                    symbolsToInsert.add(
-                        Symbol(
-                            exchange = "BINANCE",
-                            symbol = symbolStr,
-                            baseAsset = symbolStr.replace("USDT", ""),
-                            quoteAsset = "USDT",
-                            status = "TRADING"
-                        )
-                    )
-                } else if (existing.status != "TRADING") {
-                    symbolsToEnable.add(existing)
+            // Check existing for status changes
+            allExistingSymbols.forEach { s ->
+                val isValid = validSymbols.containsKey(s.symbol)
+                val isTop100 = top100SymbolNames.contains(s.symbol)
+
+                if (isValid) {
+                    if (isTop100) {
+                        if (s.status != "TRADING") symbolsToEnable.add(s)
+                    } else {
+                        if (s.status == "TRADING") symbolsToPause.add(s)
+                    }
                 }
             }
 
+            // Check for new symbols in Top 100
+            val existingNames = allExistingSymbols.map { it.symbol }.toSet()
+            top100SymbolNames.filter { !existingNames.contains(it) }.forEach { name ->
+                val info = validSymbols[name]!!
+                symbolsToInsert.add(
+                    Symbol(
+                        exchange = "BINANCE",
+                        symbol = name,
+                        baseAsset = info.baseAsset,
+                        quoteAsset = info.quoteAsset,
+                        status = "TRADING"
+                    )
+                )
+            }
+
+            // 3. Batch Execute
             if (symbolsToInsert.isNotEmpty()) {
                 batchInsertSymbols(symbolsToInsert)
                 logger.info("Bulk inserted ${symbolsToInsert.size} new symbols")
@@ -73,24 +128,25 @@ class SymbolSyncService(
 
             if (symbolsToEnable.isNotEmpty()) {
                 batchUpdateSymbolStatus(symbolsToEnable, "TRADING")
-                logger.info("Bulk enabled ${symbolsToEnable.size} existing symbols")
+                logger.info("Bulk enabled ${symbolsToEnable.size} symbols (TRADING)")
             }
 
-            val affectedSymbols = (symbolsToInsert + symbolsToEnable)
-            if (affectedSymbols.isNotEmpty()) {
-                // 1. WebSocket Subscription
-                binanceWebSocketClient.subscribe(affectedSymbols.map { it.symbol })
-                
-                // 2. Bulk Historical Backfill (for MA30)
-                marketAnalysisService.backfillHistoryBulk(affectedSymbols)
+            if (symbolsToPause.isNotEmpty()) {
+                batchUpdateSymbolStatus(symbolsToPause, "BREAK")
+                logger.info("Bulk paused ${symbolsToPause.size} symbols (BREAK)")
+            }
 
-                // 3. Bulk Today Backfill
-                marketAnalysisService.backfillTodayCandlesBulk(affectedSymbols)
+            // 4. Post-sync Backfill & Subscription
+            val newlyActive = symbolsToInsert + symbolsToEnable
+            if (newlyActive.isNotEmpty()) {
+                binanceWebSocketClient.subscribe(newlyActive.map { it.symbol })
+                marketAnalysisService.backfillHistoryBulk(newlyActive)
+                marketAnalysisService.backfillTodayCandlesBulk(newlyActive)
             }
             
-            logger.info("Symbol Sync completed: Top 100 processed, ${affectedSymbols.size} symbols updated/added.")
+            logger.info("Symbol Ranking Sync completed.")
         } catch (e: Exception) {
-            logger.error("Error during symbol sync", e)
+            logger.error("Error during ranking sync", e)
         } finally {
             isSyncing.set(false)
         }

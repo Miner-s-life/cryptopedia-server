@@ -2,6 +2,7 @@ package me.hajoo.cryptopediaserver.core.client.binance
 
 import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesBookTicker
 import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesDepth
+import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesExchangeInfo
 import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesKline
 import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesRecentTrade
 import me.hajoo.cryptopediaserver.core.client.binance.dto.FuturesTicker24h
@@ -14,6 +15,9 @@ import org.springframework.web.bind.annotation.RequestParam
     url = "\${binance.futures.base-url}"
 )
 interface BinanceFuturesMarketClient {
+
+    @GetMapping("/fapi/v1/exchangeInfo")
+    fun getExchangeInfo(): FuturesExchangeInfo
 
     @GetMapping("/fapi/v1/depth")
     fun getDepth(

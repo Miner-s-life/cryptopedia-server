@@ -255,7 +255,7 @@ class MarketAnalysisService(
         }
     }
 
-    private fun fetchTodayCandles(symbol: Symbol, startOfDay: LocalDateTime): List<me.hajoo.cryptopediaserver.core.domain.Candle1m> {
+    private fun fetchTodayCandles(symbol: Symbol, startOfDay: LocalDateTime): List<Candle1m> {
         return try {
             when (symbol.exchange) {
                 "BINANCE" -> {
