@@ -81,7 +81,10 @@ class SymbolSyncService(
                 // 1. WebSocket Subscription
                 binanceWebSocketClient.subscribe(affectedSymbols.map { it.symbol })
                 
-                // 2. Bulk Backfill
+                // 2. Bulk Historical Backfill (for MA30)
+                marketAnalysisService.backfillHistoryBulk(affectedSymbols)
+
+                // 3. Bulk Today Backfill
                 marketAnalysisService.backfillTodayCandlesBulk(affectedSymbols)
             }
             

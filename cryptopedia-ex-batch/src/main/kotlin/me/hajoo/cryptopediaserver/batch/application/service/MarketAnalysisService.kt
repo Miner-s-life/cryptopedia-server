@@ -311,6 +311,37 @@ class MarketAnalysisService(
     }
 
     @Transactional
+    fun backfillHistoryBulk(symbols: List<Symbol>) {
+        if (symbols.isEmpty()) return
+
+        val today = LocalDate.now(ZoneId.of("UTC"))
+        val yesterday = today.minusDays(1)
+
+        // Only backfill for symbols that don't have yesterday's stats
+        val toBackfill = symbols.filter {
+            dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate(it.exchange, it.symbol, yesterday) == null
+        }
+
+        if (toBackfill.isEmpty()) return
+
+        logger.info("Starting bulk history backfill for ${toBackfill.size} symbols...")
+
+        runBlocking {
+            toBackfill.chunked(10).forEach { chunk ->
+                chunk.map { symbol ->
+                    async(Dispatchers.IO) {
+                        try {
+                            backfillHistory(symbol.exchange, symbol.symbol)
+                        } catch (e: Exception) {
+                            logger.error("Failed to backfill history for ${symbol.exchange}:${symbol.symbol}", e)
+                        }
+                    }
+                }.awaitAll()
+            }
+        }
+    }
+
+    @Transactional
     fun backfillHistory(exchange: String, symbol: String) {
         // Double check if we already have stats to avoid spamming API on every restart
         val today = LocalDate.now(ZoneId.of("UTC"))
