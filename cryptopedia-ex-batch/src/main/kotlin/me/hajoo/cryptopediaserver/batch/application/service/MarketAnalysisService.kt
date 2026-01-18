@@ -156,38 +156,83 @@ class MarketAnalysisService(
                 // If no stats (new symbol?), skip or use fallback
                 if (stats == null || stats.volumeMa7d == null || stats.volumeMa30d == null) return@forEach
 
-                // 2. Get Today's Accumulated Volume
-                val currentVol = candle1mRepository.getVolumeSum(
-                    symbol.exchange, 
-                    symbol.symbol, 
-                    startOfDay, 
-                    now
-                ) ?: BigDecimal.ZERO
-
-                // 3. Calculate RVOL (Relative Volume)
-                val elapsedMinutes = Duration.between(startOfDay, now).toMinutes().coerceAtLeast(1)
+                // 2. Calculate Multi-Timeframe RVOL
                 val dailyMa = stats.volumeMa30d!!
-                
-                // Avoid division by zero
                 if (dailyMa.compareTo(BigDecimal.ZERO) == 0) return@forEach
 
+                // 2-1. Today's RVOL (existing logic)
+                val currentVol = candle1mRepository.getVolumeSum(
+                    symbol.exchange, symbol.symbol, startOfDay, now
+                ) ?: BigDecimal.ZERO
+                val elapsedMinutes = Duration.between(startOfDay, now).toMinutes().coerceAtLeast(1)
                 val expectedVol = dailyMa.multiply(BigDecimal(elapsedMinutes)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
-                
-                val rvol = if (expectedVol.compareTo(BigDecimal.ZERO) > 0) {
+                val rvolToday = if (expectedVol > BigDecimal.ZERO) {
                     currentVol.divide(expectedVol, 4, RoundingMode.HALF_UP)
                 } else BigDecimal.ZERO
 
-                // 4. Update Metrics Table
+                // 2-2. 5-minute RVOL
+                val vol5m = candle1mRepository.getVolumeSum(
+                    symbol.exchange, symbol.symbol, now.minusMinutes(5), now
+                ) ?: BigDecimal.ZERO
+                val expected5m = dailyMa.multiply(BigDecimal(5)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
+                val rvol5m = if (expected5m > BigDecimal.ZERO) {
+                    vol5m.divide(expected5m, 4, RoundingMode.HALF_UP)
+                } else BigDecimal.ZERO
+
+                // 2-3. 15-minute RVOL
+                val vol15m = candle1mRepository.getVolumeSum(
+                    symbol.exchange, symbol.symbol, now.minusMinutes(15), now
+                ) ?: BigDecimal.ZERO
+                val expected15m = dailyMa.multiply(BigDecimal(15)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
+                val rvol15m = if (expected15m > BigDecimal.ZERO) {
+                    vol15m.divide(expected15m, 4, RoundingMode.HALF_UP)
+                } else BigDecimal.ZERO
+
+                // 2-4. 30-minute RVOL
+                val vol30m = candle1mRepository.getVolumeSum(
+                    symbol.exchange, symbol.symbol, now.minusMinutes(30), now
+                ) ?: BigDecimal.ZERO
+                val expected30m = dailyMa.multiply(BigDecimal(30)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
+                val rvol30m = if (expected30m > BigDecimal.ZERO) {
+                    vol30m.divide(expected30m, 4, RoundingMode.HALF_UP)
+                } else BigDecimal.ZERO
+
+                // 2-5. 1-hour RVOL
+                val vol1h = candle1mRepository.getVolumeSum(
+                    symbol.exchange, symbol.symbol, now.minusHours(1), now
+                ) ?: BigDecimal.ZERO
+                val expected1h = dailyMa.multiply(BigDecimal(60)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
+                val rvol1h = if (expected1h > BigDecimal.ZERO) {
+                    vol1h.divide(expected1h, 4, RoundingMode.HALF_UP)
+                } else BigDecimal.ZERO
+
+                // 2-6. 4-hour RVOL
+                val vol4h = candle1mRepository.getVolumeSum(
+                    symbol.exchange, symbol.symbol, now.minusHours(4), now
+                ) ?: BigDecimal.ZERO
+                val expected4h = dailyMa.multiply(BigDecimal(240)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
+                val rvol4h = if (expected4h > BigDecimal.ZERO) {
+                    vol4h.divide(expected4h, 4, RoundingMode.HALF_UP)
+                } else BigDecimal.ZERO
+
+                // 3. Update Metrics Table
                 val metrics = symbolMetricsRepository.findByExchangeAndSymbol(symbol.exchange, symbol.symbol)
                     ?: SymbolMetrics(
                         exchange = symbol.exchange,
-                        symbol = symbol.symbol,
-                        rvol = BigDecimal.ZERO,
-                        priceChangePercent24h = BigDecimal.ZERO
+                        symbol = symbol.symbol
                     )
+                
                 metrics.apply {
-                    this.rvol = rvol
-                    this.isSurging = rvol > BigDecimal("1.5")
+                    // Update all RVOL values
+                    this.rvol5m = rvol5m
+                    this.rvol15m = rvol15m
+                    this.rvol30m = rvol30m
+                    this.rvol1h = rvol1h
+                    this.rvol4h = rvol4h
+                    this.rvolToday = rvolToday
+                    
+                    // Multi-timeframe surge detection (5m + 15m simultaneous surge)
+                    this.isSurging = rvol5m > BigDecimal("4.0") && rvol15m > BigDecimal("3.0")
                     this.lastUpdated = now
 
                     // Update Price Change from Ticker data
@@ -212,10 +257,10 @@ class MarketAnalysisService(
                 }
                 symbolMetricsRepository.save(metrics)
                 
-                // 5. Cache to Redis
+                // 4. Cache to Redis
                 cacheMetricsToRedis(metrics)
                 
-                // 6. Alerting
+                // 5. Alerting (Multi-timeframe surge)
                 if (metrics.isSurging) {
                     alertService.sendSurgeAlert(metrics)
                 }
@@ -232,7 +277,7 @@ class MarketAnalysisService(
             {
                 "exchange": "${metrics.exchange}",
                 "symbol": "${metrics.symbol}",
-                "rvol": ${metrics.rvol},
+                "rvol": ${metrics.rvolToday},
                 "priceChangePercent24h": ${metrics.priceChangePercent24h},
                 "isSurging": ${metrics.isSurging},
                 "lastUpdated": "${metrics.lastUpdated}"

@@ -23,11 +23,27 @@ class SymbolMetrics(
     @Column(name = "symbol", nullable = false, length = 20)
     val symbol: String,
 
-    @Column(name = "rvol", nullable = false, precision = 32, scale = 8)
-    var rvol: BigDecimal, // Relative Volume (Current / Average)
+    // Multi-Timeframe RVOL
+    @Column(name = "rvol_5m", nullable = false, precision = 32, scale = 8)
+    var rvol5m: BigDecimal = BigDecimal.ZERO,
+
+    @Column(name = "rvol_15m", nullable = false, precision = 32, scale = 8)
+    var rvol15m: BigDecimal = BigDecimal.ZERO,
+
+    @Column(name = "rvol_30m", nullable = false, precision = 32, scale = 8)
+    var rvol30m: BigDecimal = BigDecimal.ZERO,
+
+    @Column(name = "rvol_1h", nullable = false, precision = 32, scale = 8)
+    var rvol1h: BigDecimal = BigDecimal.ZERO,
+
+    @Column(name = "rvol_4h", nullable = false, precision = 32, scale = 8)
+    var rvol4h: BigDecimal = BigDecimal.ZERO,
+
+    @Column(name = "rvol_today", nullable = false, precision = 32, scale = 8)
+    var rvolToday: BigDecimal = BigDecimal.ZERO,
 
     @Column(name = "price_change_percent24h", nullable = false, precision = 32, scale = 8)
-    var priceChangePercent24h: BigDecimal,
+    var priceChangePercent24h: BigDecimal = BigDecimal.ZERO,
 
     @Column(name = "price_change_percent_today", nullable = false, precision = 32, scale = 8)
     var priceChangePercentToday: BigDecimal = BigDecimal.ZERO,

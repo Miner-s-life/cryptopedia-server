@@ -86,39 +86,79 @@ stateDiagram-v2
     TRADING --> DELISTED: Delisted from Exchange
 ```
 
-## 📈 RVOL (Relative Volume) Calculation
+## 📈 Multi-Timeframe RVOL System
 
-RVOL은 과거 평균 거래량 대비 현재 거래량의 비율을 나타내며, 시장의 이상 거래 징후를 탐지하는 핵심 지표입니다.
+RVOL(Relative Volume)은 과거 평균 거래량 대비 현재 거래량의 비율로, **단타 트레이딩에 최적화된 다중 타임프레임 시스템**을 제공합니다.
+
+### Timeframe Structure
+
+| 타임프레임 | 용도 | 트레이딩 스타일 | 임계값 예시 |
+|:---|:---|:---|:---|
+| **5분** | 초단타 진입 시그널 | 스캘핑 (1~5분) | > 5.0 |
+| **15분** | 단타 확인 | 단타 (10~30분) | > 3.0 |
+| **30분** | 단기 추세 확인 | 데이 트레이딩 (30분~2시간) | > 2.5 |
+| **1시간** | 중기 추세 | 스윙 (2~6시간) | > 2.0 |
+| **4시간** | 일중 큰 흐름 | 당일 청산 | > 1.8 |
+| **Today** | 오늘 전체 | 참고용 | > 1.5 |
 
 ### Calculation Logic
-1.  **Baseline (Daily MA30)**: 지난 30일간의 일일 평균 거래량(**MA**: Moving Average, 이동 평균)을 기준으로 사용합니다.
-2.  **Expected Volume**: 현재 시간(UTC)을 기준으로 오늘 하루 동안 발생할 것으로 예상되는 거래량을 계산합니다.
-    - $ExpectedVolume = DailyMA30 \times \frac{ElapsedMinutes}{1440}$
-3.  **RVOL Formula**: 현재까지 누적된 거래량을 예상 거래량으로 나눕니다.
-    - $RVOL = \frac{CurrentAccumulatedVolume}{ExpectedVolume}$
-4.  **Surge Detection**: RVOL이 **1.5 (150%)**를 초과하면 이상 급등(`isSurging = true`)으로 판단합니다.
+
+각 타임프레임별로 독립적으로 계산됩니다:
+
+1.  **실제 거래량**: 해당 타임프레임 동안의 누적 거래량
+2.  **예상 거래량**: 과거 30일 동일 시간대 평균 거래량
+3.  **RVOL**: `실제 거래량 / 예상 거래량`
+
+```
+RVOL_5m = Volume(최근 5분) / AvgVolume(과거 30일 동일 5분)
+RVOL_15m = Volume(최근 15분) / AvgVolume(과거 30일 동일 15분)
+...
+```
+
+### Trading Scenarios
+
+#### 초단타 진입 (1~5분)
+```kotlin
+if (rvol_5m > 5.0 && priceChange_5m > 1.0%) {
+    // 지금 막 터지는 중! 즉시 진입
+}
+```
+
+#### 단타 확인 (10~30분)
+```kotlin
+if (rvol_5m > 4.0 && rvol_15m > 3.0 && priceChange_15m > 2.0%) {
+    // 지속적인 매수세, 단타 진입
+}
+```
+
+#### 청산 시그널
+```kotlin
+if (rvol_5m < 1.0 && profit > 2.0%) {
+    // 거래량 소멸, 익절 청산
+}
+```
 
 ### Data Flow Sequence
 
 ```mermaid
 sequenceDiagram
-    participant DB as MySQL (Candles/Stats)
+    participant DB as MySQL (Candles)
     participant Batch as MarketAnalysisService
     participant Redis as Redis Cache
     participant Alert as AlertService
 
-    loop Every Minute (Real-time Metrics Update)
-        Batch->>DB: Fetch Yesterday's MA30
-        Batch->>DB: Fetch Today's Accumulated Volume (00:00 ~ Now)
+    loop Every Minute
+        Batch->>DB: Fetch last 5m/15m/30m/1h/4h candles
+        Batch->>DB: Fetch historical avg volumes
         
-        Note over Batch: Calculate Expected Volume<br/>Calculate RVOL
+        Note over Batch: Calculate RVOL for each timeframe
         
-        Batch->>DB: Save SymbolMetrics (RVOL, isSurging)
-        Batch->>Redis: Cache Metrics (for API)
+        Batch->>DB: Save SymbolMetrics (6 RVOL values)
+        Batch->>Redis: Cache Metrics
         
-        opt isSurging == true
-            Batch->>Alert: Trigger Surge Alert
-            Alert-->>User: Slack Notification
+        opt Multi-timeframe surge detected
+            Batch->>Alert: Trigger Alert (5m + 15m surge)
+            Alert-->>User: Slack/Telegram Notification
         end
     end
 ```

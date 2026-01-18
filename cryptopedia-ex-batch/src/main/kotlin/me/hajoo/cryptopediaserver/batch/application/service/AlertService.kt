@@ -28,7 +28,7 @@ class AlertService(
                     
                     *Exchange*: ${metrics.exchange}
                     *Symbol*: ${metrics.symbol}
-                    *RVOL*: ${metrics.rvol} (Expected: 1.0)
+                    *RVOL*: ${metrics.rvolToday} (Expected: 1.0)
                     *Price Change (24h)*: ${metrics.priceChangePercent24h}%
                     
                     🌊 _Trading volume is significantly higher than average!_
