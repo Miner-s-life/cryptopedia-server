@@ -16,5 +16,9 @@ interface Candle1mRepository : JpaRepository<Candle1m, Long> {
 
     fun findTop100ByExchangeAndSymbolOrderByOpenTimeDesc(exchange: String, symbol: String): List<Candle1m>
 
+    fun findFirstByExchangeAndSymbolAndOpenTimeGreaterThanEqualOrderByOpenTimeAsc(
+        exchange: String, symbol: String, start: LocalDateTime
+    ): Candle1m?
+
     fun existsByExchangeAndSymbolAndOpenTime(exchange: String, symbol: String, openTime: LocalDateTime): Boolean
 }

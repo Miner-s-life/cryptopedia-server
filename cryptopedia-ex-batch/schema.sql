@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS symbol_metrics (
     symbol VARCHAR(20) NOT NULL,
     rvol DECIMAL(32,8) NOT NULL,
     price_change_percent24h DECIMAL(32,8) NOT NULL,
+    price_change_percent_today DECIMAL(32,8) NOT NULL DEFAULT 0,
     is_surging BIT(1) NOT NULL,
     last_updated DATETIME(6) NOT NULL,
     UNIQUE KEY uk_metrics_ex_sy (exchange, symbol)

@@ -28,6 +28,9 @@ class SymbolMetrics(
 
     @Column(name = "price_change_percent24h", nullable = false, precision = 32, scale = 8)
     var priceChangePercent24h: BigDecimal,
+
+    @Column(name = "price_change_percent_today", nullable = false, precision = 32, scale = 8)
+    var priceChangePercentToday: BigDecimal = BigDecimal.ZERO,
     
     @Column(name = "is_surging", nullable = false)
     var isSurging: Boolean = false, // Simple flag for high RVOL + Price Up

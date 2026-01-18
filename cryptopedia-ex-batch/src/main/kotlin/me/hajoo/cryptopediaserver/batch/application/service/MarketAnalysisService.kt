@@ -140,6 +140,14 @@ class MarketAnalysisService(
         // 0. Ensure we have data for today (Backfill if missing) - Batch optimized
         backfillTodayCandlesBulk(symbols)
 
+        // 1. Fetch all 24h tickers once to share across symbols
+        val allTickers = try {
+            binanceFuturesMarketClient.getAll24hTickers().associateBy { it.symbol }
+        } catch (e: Exception) {
+            logger.error("Failed to fetch 24h tickers for metrics update", e)
+            emptyMap()
+        }
+
         symbols.forEach { symbol ->
             try {
                 // 1. Get Baseline (Yesterday's Stats with MA)
@@ -157,13 +165,6 @@ class MarketAnalysisService(
                 ) ?: BigDecimal.ZERO
 
                 // 3. Calculate RVOL (Relative Volume)
-                // Logic: Compare currentVol against (MA * TimeProgress%) ?? 
-                // Simple version: RVOL = CurrentVol / MA_30D * (1440 / CurrentMinuteOfDay)? NO.
-                // Better version for crypto: Compare against "Same time window avg" (Hard to do without hourly stats)
-                // Quick proxy: 
-                // ExpectedVol = MA_30D * (ElapsedMinutes / 1440)
-                // RVOL = CurrentVol / ExpectedVol
-                
                 val elapsedMinutes = Duration.between(startOfDay, now).toMinutes().coerceAtLeast(1)
                 val dailyMa = stats.volumeMa30d!!
                 
@@ -184,14 +185,30 @@ class MarketAnalysisService(
                         rvol = BigDecimal.ZERO,
                         priceChangePercent24h = BigDecimal.ZERO
                     )
-
                 metrics.apply {
                     this.rvol = rvol
-                    this.isSurging = rvol > BigDecimal("1.5") // Threshold: 150% of expected
+                    this.isSurging = rvol > BigDecimal("1.5")
                     this.lastUpdated = now
-                    
-                    // TODO: Get Price Change from Ticker table if needed, or leave it for Ticker ingestion update
-                    // For now let's just update RVOL
+
+                    // Update Price Change from Ticker data
+                    val ticker = allTickers[symbol.symbol]
+                    ticker?.priceChangePercent?.let {
+                        this.priceChangePercent24h = it
+                    }
+
+                    // Calculate Today's Price Change (since UTC 00:00)
+                    val firstCandle = candle1mRepository.findFirstByExchangeAndSymbolAndOpenTimeGreaterThanEqualOrderByOpenTimeAsc(
+                        symbol.exchange, symbol.symbol, startOfDay
+                    )
+                    if (firstCandle != null && ticker?.lastPrice != null) {
+                        val openPrice = firstCandle.openPrice
+                        if (openPrice > BigDecimal.ZERO) {
+                            val currentPrice = ticker.lastPrice!!
+                            val diff = currentPrice.subtract(openPrice)
+                            this.priceChangePercentToday = diff.divide(openPrice, 8, RoundingMode.HALF_UP)
+                                .multiply(BigDecimal("100"))
+                        }
+                    }
                 }
                 symbolMetricsRepository.save(metrics)
                 
