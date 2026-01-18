@@ -3,7 +3,9 @@ package me.hajoo.cryptopediaserver.core.domain
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
@@ -21,4 +23,30 @@ interface Candle1mRepository : JpaRepository<Candle1m, Long> {
     ): Candle1m?
 
     fun existsByExchangeAndSymbolAndOpenTime(exchange: String, symbol: String, openTime: LocalDateTime): Boolean
+
+    @Modifying
+    @Query(value = """
+        INSERT INTO candles_1m (exchange, symbol, open_time, open_price, high_price, low_price, close_price, volume, quote_volume, trades)
+        VALUES (:exchange, :symbol, :openTime, :openPrice, :highPrice, :lowPrice, :closePrice, :volume, :quoteVolume, :trades)
+        ON DUPLICATE KEY UPDATE
+            open_price = VALUES(open_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            close_price = VALUES(close_price),
+            volume = VALUES(volume),
+            quote_volume = VALUES(quote_volume),
+            trades = VALUES(trades)
+    """, nativeQuery = true)
+    fun upsert(
+        @Param("exchange") exchange: String,
+        @Param("symbol") symbol: String,
+        @Param("openTime") openTime: LocalDateTime,
+        @Param("openPrice") openPrice: BigDecimal,
+        @Param("highPrice") highPrice: BigDecimal,
+        @Param("lowPrice") lowPrice: BigDecimal,
+        @Param("closePrice") closePrice: BigDecimal,
+        @Param("volume") volume: BigDecimal,
+        @Param("quoteVolume") quoteVolume: BigDecimal,
+        @Param("trades") trades: Long
+    )
 }

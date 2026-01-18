@@ -32,39 +32,18 @@ class MarketDataIngestionServiceImpl(
         val openTimeLdt = LocalDateTime.ofInstant(Instant.ofEpochMilli(openTime), ZoneId.of("UTC"))
         val exchange = "BINANCE"
 
-        val existing = candle1mRepository.findByExchangeAndSymbolAndOpenTime(exchange, symbol, openTimeLdt)
-        
-        if (existing != null) {
-            val updated = Candle1m(
-                id = existing.id,
-                exchange = exchange,
-                symbol = symbol,
-                openTime = openTimeLdt,
-                openPrice = open,
-                highPrice = high,
-                lowPrice = low,
-                closePrice = close,
-                volume = volume,
-                quoteVolume = quoteVolume,
-                trades = trades
-            )
-            candle1mRepository.save(updated)
-        } else {
-             candle1mRepository.save(
-                 Candle1m(
-                     exchange = exchange,
-                     symbol = symbol,
-                     openTime = openTimeLdt,
-                     openPrice = open,
-                     highPrice = high,
-                     lowPrice = low,
-                     closePrice = close,
-                     volume = volume,
-                     quoteVolume = quoteVolume,
-                     trades = trades
-                 )
-            )
-        }
+        candle1mRepository.upsert(
+            exchange = exchange,
+            symbol = symbol,
+            openTime = openTimeLdt,
+            openPrice = open,
+            highPrice = high,
+            lowPrice = low,
+            closePrice = close,
+            volume = volume,
+            quoteVolume = quoteVolume,
+            trades = trades
+        )
     }
 
     override fun processTicker(
@@ -75,28 +54,15 @@ class MarketDataIngestionServiceImpl(
         quoteVolume24h: BigDecimal
     ) {
         val exchange = "BINANCE"
-        val existing = ticker24hLatestRepository.findByExchangeAndSymbol(exchange, symbol)
-
-        if (existing != null) {
-             existing.apply {
-                 this.lastPrice = lastPrice
-                 this.priceChangePercent = priceChangePercent
-                 this.volume24h = volume24h
-                 this.quoteVolume24h = quoteVolume24h
-                 this.lastUpdated = LocalDateTime.now()
-             }
-             ticker24hLatestRepository.save(existing)
-        } else {
-            ticker24hLatestRepository.save(
-                Ticker24hLatest(
-                    exchange = exchange,
-                    symbol = symbol,
-                    lastPrice = lastPrice,
-                    priceChangePercent = priceChangePercent,
-                    volume24h = volume24h,
-                    quoteVolume24h = quoteVolume24h
-                )
-            )
-        }
+        
+        ticker24hLatestRepository.upsert(
+            exchange = exchange,
+            symbol = symbol,
+            lastPrice = lastPrice,
+            priceChangePercent = priceChangePercent,
+            volume24h = volume24h,
+            quoteVolume24h = quoteVolume24h,
+            lastUpdated = LocalDateTime.now()
+        )
     }
 }
