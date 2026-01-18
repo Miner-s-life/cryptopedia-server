@@ -1,4 +1,4 @@
-<configuration>
+<configuration scan="false">
   <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="app"/>
 
   <springProfile name="!prod">
