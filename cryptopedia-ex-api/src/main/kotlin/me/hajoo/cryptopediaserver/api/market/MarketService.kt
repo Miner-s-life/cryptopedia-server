@@ -2,11 +2,13 @@ package me.hajoo.cryptopediaserver.api.market
 
 import me.hajoo.cryptopediaserver.api.market.dto.CandleResponse
 import me.hajoo.cryptopediaserver.api.market.dto.SymbolResponse
-import me.hajoo.cryptopediaserver.api.market.dto.TickerWithMetricsResponse
-import me.hajoo.cryptopediaserver.core.domain.*
+import me.hajoo.cryptopediaserver.core.market.dto.TickerWithMetricsResponse
+import me.hajoo.cryptopediaserver.core.domain.Candle1mRepository
+import me.hajoo.cryptopediaserver.core.domain.SymbolMetricsRepository
+import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
+import me.hajoo.cryptopediaserver.core.domain.Ticker24hLatestRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.LocalDateTime
 
 @Service
 @Transactional(readOnly = true)
@@ -33,7 +35,7 @@ class MarketService(
         val tickers = ticker24hLatestRepository.findAll()
         val metricsMap = symbolMetricsRepository.findAll().associateBy { "${it.exchange}:${it.symbol}" }
 
-        return tickers.map { ticker ->
+        val currentTickers = tickers.map { ticker ->
             val metrics = metricsMap["${ticker.exchange}:${ticker.symbol}"]
             TickerWithMetricsResponse(
                 exchange = ticker.exchange,
@@ -54,6 +56,7 @@ class MarketService(
                 lastUpdated = ticker.lastUpdated
             )
         }
+        return currentTickers
     }
 
     fun getCandles(exchange: String, symbol: String, limit: Int = 100): List<CandleResponse> {

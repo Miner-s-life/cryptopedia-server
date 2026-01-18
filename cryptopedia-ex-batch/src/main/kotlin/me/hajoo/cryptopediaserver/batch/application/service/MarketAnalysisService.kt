@@ -6,9 +6,13 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import me.hajoo.cryptopediaserver.core.client.binance.BinanceFuturesMarketClient
 import me.hajoo.cryptopediaserver.core.domain.*
+import me.hajoo.cryptopediaserver.core.market.dto.TickerWithMetricsResponse
+import me.hajoo.cryptopediaserver.core.market.event.TickerUpdateEvent
+import me.hajoo.cryptopediaserver.core.market.publisher.TickerUpdatePublisher
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -24,7 +28,8 @@ class MarketAnalysisService(
     private val binanceFuturesMarketClient: BinanceFuturesMarketClient,
     private val redisTemplate: RedisTemplate<String, String>,
     private val alertService: AlertService,
-    private val jdbcTemplate: JdbcTemplate
+    private val jdbcTemplate: JdbcTemplate,
+    private val tickerUpdatePublisher: TickerUpdatePublisher
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -200,6 +205,8 @@ class MarketAnalysisService(
             emptyMap()
         }
 
+        val updatedTickers = mutableListOf<TickerWithMetricsResponse>()
+
         symbols.forEach { symbol ->
             try {
                 // 1. Get Baseline (Yesterday's Stats with MA)
@@ -223,7 +230,6 @@ class MarketAnalysisService(
                 } else BigDecimal.ZERO
 
                 // 2-2. 1-minute RVOL (ultra-fast detection)
-                // Use the most recent completed candle instead of the currently forming one
                 val candleEnd = now.withSecond(0).withNano(0)
                 val candleStart = candleEnd.minusMinutes(1)
                 
@@ -287,8 +293,9 @@ class MarketAnalysisService(
                         symbol = symbol.symbol
                     )
                 
+                val ticker = allTickers[symbol.symbol]
+                
                 metrics.apply {
-                    // Update all RVOL values
                     this.rvol1m = rvol1m
                     this.rvol5m = rvol5m
                     this.rvol15m = rvol15m
@@ -296,18 +303,12 @@ class MarketAnalysisService(
                     this.rvol1h = rvol1h
                     this.rvol4h = rvol4h
                     this.rvolToday = rvolToday
-                    
-                    // Multi-timeframe surge detection (1m + 5m + 15m for strong confirmation)
                     this.isSurging = rvol1m > BigDecimal("8.0") && rvol5m > BigDecimal("4.0") && rvol15m > BigDecimal("3.0")
                     this.lastUpdated = now
-
-                    // Update Price Change from Ticker data
-                    val ticker = allTickers[symbol.symbol]
                     ticker?.priceChangePercent?.let {
                         this.priceChangePercent24h = it
                     }
 
-                    // Calculate Today's Price Change (since UTC 00:00)
                     val firstCandle = candle1mRepository.findFirstByExchangeAndSymbolAndOpenTimeGreaterThanEqualOrderByOpenTimeAsc(
                         symbol.exchange, symbol.symbol, startOfDay
                     )
@@ -323,17 +324,40 @@ class MarketAnalysisService(
                 }
                 symbolMetricsRepository.save(metrics)
                 
-                // 4. Cache to Redis
                 cacheMetricsToRedis(metrics)
                 
-                // 5. Alerting (Multi-timeframe surge)
                 if (metrics.isSurging) {
                     alertService.sendSurgeAlert(metrics)
                 }
 
+                updatedTickers.add(
+                    TickerWithMetricsResponse(
+                        exchange = symbol.exchange,
+                        symbol = symbol.symbol,
+                        lastPrice = ticker?.lastPrice ?: BigDecimal.ZERO,
+                        priceChangePercent = ticker?.priceChangePercent ?: BigDecimal.ZERO,
+                        volume24h = ticker?.volume ?: BigDecimal.ZERO,
+                        quoteVolume24h = ticker?.quoteVolume ?: BigDecimal.ZERO,
+                        rvol1m = metrics.rvol1m,
+                        rvol5m = metrics.rvol5m,
+                        rvol15m = metrics.rvol15m,
+                        rvol30m = metrics.rvol30m,
+                        rvol1h = metrics.rvol1h,
+                        rvol4h = metrics.rvol4h,
+                        rvolToday = metrics.rvolToday,
+                        priceChangePercentToday = metrics.priceChangePercentToday,
+                        isSurging = metrics.isSurging,
+                        lastUpdated = now
+                    )
+                )
+
             } catch (e: Exception) {
                 logger.error("Real-time metrics error for ${symbol.symbol}", e)
             }
+        }
+
+        if (updatedTickers.isNotEmpty()) {
+            tickerUpdatePublisher.publish(TickerUpdateEvent(updatedTickers))
         }
     }
 

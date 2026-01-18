@@ -9,8 +9,8 @@ class RealTimeMetricsScheduler(
     private val marketAnalysisService: MarketAnalysisService
 ) {
 
-    // Run every minute (cron: "0 * * * * *")
-    @Scheduled(cron = "0 * * * * *", zone = "UTC")
+    // Run every second
+    @Scheduled(fixedDelay = 1000)
     fun runRealTimeUpdate() {
         marketAnalysisService.updateRealTimeMetrics()
     }

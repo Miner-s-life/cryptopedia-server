@@ -3,7 +3,7 @@ package me.hajoo.cryptopediaserver.api.market
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import me.hajoo.cryptopediaserver.api.market.dto.CandleResponse
 import me.hajoo.cryptopediaserver.api.market.dto.SymbolResponse
-import me.hajoo.cryptopediaserver.api.market.dto.TickerWithMetricsResponse
+import me.hajoo.cryptopediaserver.core.market.dto.TickerWithMetricsResponse
 import me.hajoo.cryptopediaserver.core.common.response.ApiResponse
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
