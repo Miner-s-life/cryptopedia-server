@@ -29,6 +29,58 @@ class MarketAnalysisService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Transactional
+    fun backfillMissingCandles(symbols: List<Symbol>) {
+        val now = LocalDateTime.now(ZoneId.of("UTC"))
+        
+        symbols.forEach { symbol ->
+            try {
+                val latestTime = candle1mRepository.findLatestOpenTime(symbol.exchange, symbol.symbol)
+                val startTime = latestTime?.plusMinutes(1) ?: now.minusHours(1)
+                
+                if (Duration.between(startTime, now).toMinutes() > 1) {
+                    logger.info("Backfilling missing candles for ${symbol.symbol} from $startTime to $now")
+                    val missingCandles = fetchCandlesInRange(symbol, startTime, now)
+                    if (missingCandles.isNotEmpty()) {
+                        batchInsertCandles(missingCandles)
+                        logger.info("Restored ${missingCandles.size} missing candles for ${symbol.symbol}")
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error("Failed to backfill for ${symbol.symbol}", e)
+            }
+        }
+    }
+
+    private fun fetchCandlesInRange(symbol: Symbol, start: LocalDateTime, end: LocalDateTime): List<Candle1m> {
+        val startTime = start.atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+        return try {
+            when (symbol.exchange) {
+                "BINANCE" -> {
+                    binanceFuturesMarketClient.getKlines(symbol.symbol, "1m", startTime = startTime, limit = 1500)
+                        .map { k ->
+                            Candle1m(
+                                exchange = symbol.exchange,
+                                symbol = symbol.symbol,
+                                openTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(k.openTime), ZoneId.of("UTC")),
+                                openPrice = k.openPrice,
+                                highPrice = k.highPrice,
+                                lowPrice = k.lowPrice,
+                                closePrice = k.closePrice,
+                                volume = k.volume,
+                                quoteVolume = k.quoteAssetVolume,
+                                trades = k.numberOfTrades
+                            )
+                        }
+                }
+                else -> emptyList()
+            }
+        } catch (e: Exception) {
+            logger.error("Error fetching candles for backfill: ${symbol.symbol}", e)
+            emptyList()
+        }
+    }
+
+    @Transactional
     fun aggregateDailyStats(targetDate: LocalDate) {
         logger.info("Starting daily aggregation for date: $targetDate")
         

@@ -1,6 +1,8 @@
 package me.hajoo.cryptopediaserver.batch.config
 
 import me.hajoo.cryptopediaserver.batch.adapter.`in`.binance.BinanceWebSocketClient
+import me.hajoo.cryptopediaserver.batch.application.service.MarketAnalysisService
+import me.hajoo.cryptopediaserver.batch.application.service.SymbolSyncService
 import me.hajoo.cryptopediaserver.core.domain.Symbol
 import me.hajoo.cryptopediaserver.core.domain.SymbolRepository
 import org.slf4j.LoggerFactory
@@ -11,7 +13,8 @@ import org.springframework.stereotype.Component
 class DataCollectionInitializer(
     private val symbolRepository: SymbolRepository,
     private val binanceWebSocketClient: BinanceWebSocketClient,
-    private val symbolSyncService: me.hajoo.cryptopediaserver.batch.application.service.SymbolSyncService
+    private val symbolSyncService: SymbolSyncService,
+    private val marketAnalysisService: MarketAnalysisService
 ) : CommandLineRunner {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -22,13 +25,14 @@ class DataCollectionInitializer(
         // 1. Run initial sync
         symbolSyncService.syncTopVolumeSymbols()
 
-        // 2. Connect WebSocket for ALL active symbols (including newly synced ones)
-        val allSymbolsCount = symbolRepository.count()
-        val activeSymbols = symbolRepository.findAllByStatus("TRADING").map { it.symbol }
+        // 2. Backfill missing candles before starting WebSocket
+        val tradingSymbols = symbolRepository.findAllByStatus("TRADING")
+        marketAnalysisService.backfillMissingCandles(tradingSymbols)
+
+        // 3. Connect WebSocket for ALL active symbols
+        val activeSymbols = tradingSymbols.map { it.symbol }
         
-        logger.info("Database total symbols: $allSymbolsCount, Active symbols: ${activeSymbols.size}")
-        
-        // Always connect, even if empty, so that subsequent syncs can subscribe
+        logger.info("Active symbols to subscribe: ${activeSymbols.size}")
         binanceWebSocketClient.connect(activeSymbols)
     }
 }
