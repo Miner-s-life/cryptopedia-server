@@ -42,7 +42,14 @@ class MarketService(
                 priceChangePercent = ticker.priceChangePercent,
                 volume24h = ticker.volume24h,
                 quoteVolume24h = ticker.quoteVolume24h,
-                rvol = metrics?.rvol ?: java.math.BigDecimal.ZERO,
+                rvol1m = metrics?.rvol1m ?: java.math.BigDecimal.ZERO,
+                rvol5m = metrics?.rvol5m ?: java.math.BigDecimal.ZERO,
+                rvol15m = metrics?.rvol15m ?: java.math.BigDecimal.ZERO,
+                rvol30m = metrics?.rvol30m ?: java.math.BigDecimal.ZERO,
+                rvol1h = metrics?.rvol1h ?: java.math.BigDecimal.ZERO,
+                rvol4h = metrics?.rvol4h ?: java.math.BigDecimal.ZERO,
+                rvolToday = metrics?.rvolToday ?: java.math.BigDecimal.ZERO,
+                priceChangePercentToday = metrics?.priceChangePercentToday ?: java.math.BigDecimal.ZERO,
                 isSurging = metrics?.isSurging ?: false,
                 lastUpdated = ticker.lastUpdated
             )

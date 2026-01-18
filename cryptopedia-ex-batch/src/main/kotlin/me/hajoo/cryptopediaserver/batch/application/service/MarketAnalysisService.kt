@@ -287,8 +287,15 @@ class MarketAnalysisService(
             {
                 "exchange": "${metrics.exchange}",
                 "symbol": "${metrics.symbol}",
-                "rvol": ${metrics.rvolToday},
+                "rvol1m": ${metrics.rvol1m},
+                "rvol5m": ${metrics.rvol5m},
+                "rvol15m": ${metrics.rvol15m},
+                "rvol30m": ${metrics.rvol30m},
+                "rvol1h": ${metrics.rvol1h},
+                "rvol4h": ${metrics.rvol4h},
+                "rvolToday": ${metrics.rvolToday},
                 "priceChangePercent24h": ${metrics.priceChangePercent24h},
+                "priceChangePercentToday": ${metrics.priceChangePercentToday},
                 "isSurging": ${metrics.isSurging},
                 "lastUpdated": "${metrics.lastUpdated}"
             }
