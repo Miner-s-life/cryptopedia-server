@@ -207,6 +207,7 @@ class BinanceWebSocketClient(
             close = kline.get("c").asText().toBigDecimal(),
             volume = kline.get("v").asText().toBigDecimal(),
             quoteVolume = kline.get("q").asText().toBigDecimal(),
+            takerBuyQuoteVolume = kline.get("Q").asText().toBigDecimal(),
             trades = kline.get("n").asLong()
         )
         // 같은 심볼+시간대의 캔들은 최신 데이터로 덮어쓰기

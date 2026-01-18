@@ -72,6 +72,7 @@ class MarketService(
                 close = it.closePrice,
                 volume = it.volume,
                 quoteVolume = it.quoteVolume,
+                takerBuyQuoteVolume = it.takerBuyQuoteVolume,
                 trades = it.trades
             )
         }.reversed()

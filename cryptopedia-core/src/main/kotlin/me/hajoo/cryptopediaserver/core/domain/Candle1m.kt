@@ -44,6 +44,9 @@ class Candle1m(
     @Column(name = "quote_volume", nullable = false, precision = 32, scale = 8)
     val quoteVolume: BigDecimal, // Quote Asset Volume
 
+    @Column(name = "taker_buy_quote_volume", nullable = false, precision = 32, scale = 8)
+    val takerBuyQuoteVolume: BigDecimal, // Taker Buy Quote Asset Volume
+
     @Column(name = "trades", nullable = false)
     val trades: Long
 )

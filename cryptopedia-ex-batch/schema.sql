@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS candles_1m (
     close_price DECIMAL(32,8) NOT NULL,
     volume DECIMAL(32,8) NOT NULL,
     quote_volume DECIMAL(32,8) NOT NULL,
+    taker_buy_quote_volume DECIMAL(32,8) NOT NULL DEFAULT 0,
     trades BIGINT NOT NULL,
     UNIQUE KEY idx_ex_sy_ot (exchange, symbol, open_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

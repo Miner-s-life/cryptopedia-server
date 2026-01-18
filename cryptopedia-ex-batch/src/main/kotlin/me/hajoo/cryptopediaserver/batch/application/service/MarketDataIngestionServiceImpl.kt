@@ -26,8 +26,8 @@ class MarketDataIngestionServiceImpl(
 
         val exchange = "BINANCE"
         val sql = """
-            INSERT INTO candles_1m (exchange, symbol, open_time, open_price, high_price, low_price, close_price, volume, quote_volume, trades)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO candles_1m (exchange, symbol, open_time, open_price, high_price, low_price, close_price, volume, quote_volume, taker_buy_quote_volume, trades)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 open_price = VALUES(open_price),
                 high_price = VALUES(high_price),
@@ -35,6 +35,7 @@ class MarketDataIngestionServiceImpl(
                 close_price = VALUES(close_price),
                 volume = VALUES(volume),
                 quote_volume = VALUES(quote_volume),
+                taker_buy_quote_volume = VALUES(taker_buy_quote_volume),
                 trades = VALUES(trades)
         """.trimIndent()
 
@@ -49,7 +50,8 @@ class MarketDataIngestionServiceImpl(
             ps.setBigDecimal(7, kline.close)
             ps.setBigDecimal(8, kline.volume)
             ps.setBigDecimal(9, kline.quoteVolume)
-            ps.setLong(10, kline.trades)
+            ps.setBigDecimal(10, kline.takerBuyQuoteVolume)
+            ps.setLong(11, kline.trades)
         }
     }
 

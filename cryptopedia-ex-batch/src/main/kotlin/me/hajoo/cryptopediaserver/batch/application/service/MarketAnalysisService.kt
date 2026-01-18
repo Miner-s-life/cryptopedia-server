@@ -73,7 +73,8 @@ class MarketAnalysisService(
                                 closePrice = k.closePrice,
                                 volume = k.volume,
                                 quoteVolume = k.quoteAssetVolume,
-                                trades = k.numberOfTrades
+                                trades = k.numberOfTrades,
+                                takerBuyQuoteVolume = k.takerBuyQuoteVolume,
                             )
                         }
                 }
@@ -432,6 +433,7 @@ class MarketAnalysisService(
                             closePrice = k.closePrice,
                             volume = k.volume,
                             quoteVolume = k.quoteAssetVolume,
+                            takerBuyQuoteVolume = k.takerBuyQuoteVolume,
                             trades = k.numberOfTrades
                         )
                     }
@@ -452,8 +454,8 @@ class MarketAnalysisService(
         if (candles.isEmpty()) return
 
         val sql = """
-            INSERT IGNORE INTO candles_1m (exchange, symbol, open_time, open_price, high_price, low_price, close_price, volume, quote_volume, trades)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT IGNORE INTO candles_1m (exchange, symbol, open_time, open_price, high_price, low_price, close_price, volume, quote_volume, taker_buy_quote_volume, trades)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """.trimIndent()
 
         jdbcTemplate.batchUpdate(sql, candles, 1000) { ps, candle ->
@@ -466,7 +468,8 @@ class MarketAnalysisService(
             ps.setBigDecimal(7, candle.closePrice)
             ps.setBigDecimal(8, candle.volume)
             ps.setBigDecimal(9, candle.quoteVolume)
-            ps.setLong(10, candle.trades)
+            ps.setBigDecimal(10, candle.takerBuyQuoteVolume)
+            ps.setLong(11, candle.trades)
         }
     }
 

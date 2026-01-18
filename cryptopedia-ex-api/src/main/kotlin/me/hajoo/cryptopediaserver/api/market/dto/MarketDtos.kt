@@ -19,5 +19,6 @@ data class CandleResponse(
     val close: BigDecimal,
     val volume: BigDecimal,
     val quoteVolume: BigDecimal,
+    val takerBuyQuoteVolume: BigDecimal,
     val trades: Long
 )
