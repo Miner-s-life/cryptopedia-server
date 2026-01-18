@@ -171,8 +171,12 @@ class MarketAnalysisService(
                 } else BigDecimal.ZERO
 
                 // 2-2. 1-minute RVOL (ultra-fast detection)
+                // Use the most recent completed candle instead of the currently forming one
+                val candleEnd = now.withSecond(0).withNano(0)
+                val candleStart = candleEnd.minusMinutes(1)
+                
                 val vol1m = candle1mRepository.getVolumeSum(
-                    symbol.exchange, symbol.symbol, now.minusMinutes(1), now
+                    symbol.exchange, symbol.symbol, candleStart, candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected1m = dailyMa.multiply(BigDecimal(1)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
                 val rvol1m = if (expected1m > BigDecimal.ZERO) {
@@ -181,7 +185,7 @@ class MarketAnalysisService(
 
                 // 2-3. 5-minute RVOL
                 val vol5m = candle1mRepository.getVolumeSum(
-                    symbol.exchange, symbol.symbol, now.minusMinutes(5), now
+                    symbol.exchange, symbol.symbol, candleEnd.minusMinutes(5), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected5m = dailyMa.multiply(BigDecimal(5)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
                 val rvol5m = if (expected5m > BigDecimal.ZERO) {
@@ -190,7 +194,7 @@ class MarketAnalysisService(
 
                 // 2-3. 15-minute RVOL
                 val vol15m = candle1mRepository.getVolumeSum(
-                    symbol.exchange, symbol.symbol, now.minusMinutes(15), now
+                    symbol.exchange, symbol.symbol, candleEnd.minusMinutes(15), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected15m = dailyMa.multiply(BigDecimal(15)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
                 val rvol15m = if (expected15m > BigDecimal.ZERO) {
@@ -199,7 +203,7 @@ class MarketAnalysisService(
 
                 // 2-4. 30-minute RVOL
                 val vol30m = candle1mRepository.getVolumeSum(
-                    symbol.exchange, symbol.symbol, now.minusMinutes(30), now
+                    symbol.exchange, symbol.symbol, candleEnd.minusMinutes(30), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected30m = dailyMa.multiply(BigDecimal(30)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
                 val rvol30m = if (expected30m > BigDecimal.ZERO) {
@@ -208,7 +212,7 @@ class MarketAnalysisService(
 
                 // 2-5. 1-hour RVOL
                 val vol1h = candle1mRepository.getVolumeSum(
-                    symbol.exchange, symbol.symbol, now.minusHours(1), now
+                    symbol.exchange, symbol.symbol, candleEnd.minusHours(1), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected1h = dailyMa.multiply(BigDecimal(60)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
                 val rvol1h = if (expected1h > BigDecimal.ZERO) {
@@ -217,7 +221,7 @@ class MarketAnalysisService(
 
                 // 2-6. 4-hour RVOL
                 val vol4h = candle1mRepository.getVolumeSum(
-                    symbol.exchange, symbol.symbol, now.minusHours(4), now
+                    symbol.exchange, symbol.symbol, candleEnd.minusHours(4), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected4h = dailyMa.multiply(BigDecimal(240)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
                 val rvol4h = if (expected4h > BigDecimal.ZERO) {
