@@ -170,7 +170,16 @@ class MarketAnalysisService(
                     currentVol.divide(expectedVol, 4, RoundingMode.HALF_UP)
                 } else BigDecimal.ZERO
 
-                // 2-2. 5-minute RVOL
+                // 2-2. 1-minute RVOL (ultra-fast detection)
+                val vol1m = candle1mRepository.getVolumeSum(
+                    symbol.exchange, symbol.symbol, now.minusMinutes(1), now
+                ) ?: BigDecimal.ZERO
+                val expected1m = dailyMa.multiply(BigDecimal(1)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
+                val rvol1m = if (expected1m > BigDecimal.ZERO) {
+                    vol1m.divide(expected1m, 4, RoundingMode.HALF_UP)
+                } else BigDecimal.ZERO
+
+                // 2-3. 5-minute RVOL
                 val vol5m = candle1mRepository.getVolumeSum(
                     symbol.exchange, symbol.symbol, now.minusMinutes(5), now
                 ) ?: BigDecimal.ZERO
@@ -224,6 +233,7 @@ class MarketAnalysisService(
                 
                 metrics.apply {
                     // Update all RVOL values
+                    this.rvol1m = rvol1m
                     this.rvol5m = rvol5m
                     this.rvol15m = rvol15m
                     this.rvol30m = rvol30m
@@ -231,8 +241,8 @@ class MarketAnalysisService(
                     this.rvol4h = rvol4h
                     this.rvolToday = rvolToday
                     
-                    // Multi-timeframe surge detection (5m + 15m simultaneous surge)
-                    this.isSurging = rvol5m > BigDecimal("4.0") && rvol15m > BigDecimal("3.0")
+                    // Multi-timeframe surge detection (1m + 5m + 15m for strong confirmation)
+                    this.isSurging = rvol1m > BigDecimal("8.0") && rvol5m > BigDecimal("4.0") && rvol15m > BigDecimal("3.0")
                     this.lastUpdated = now
 
                     // Update Price Change from Ticker data

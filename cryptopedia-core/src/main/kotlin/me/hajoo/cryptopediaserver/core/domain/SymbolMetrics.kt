@@ -24,6 +24,9 @@ class SymbolMetrics(
     val symbol: String,
 
     // Multi-Timeframe RVOL
+    @Column(name = "rvol_1m", nullable = false, precision = 32, scale = 8)
+    var rvol1m: BigDecimal = BigDecimal.ZERO,
+
     @Column(name = "rvol_5m", nullable = false, precision = 32, scale = 8)
     var rvol5m: BigDecimal = BigDecimal.ZERO,
 
