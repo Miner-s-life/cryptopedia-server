@@ -32,9 +32,9 @@ class DailyVolumeStats(
     @Column(name = "quote_volume_sum", nullable = false, precision = 32, scale = 8)
     val quoteVolumeSum: BigDecimal,
     
-    @Column(name = "volume_ma_7d", nullable = true, precision = 32, scale = 8)
-    val volumeMa7d: BigDecimal? = null, // Moving Average 7 Days
+    @Column(name = "quote_volume_ma_7d", nullable = true, precision = 32, scale = 8)
+    val quoteVolumeMa7d: BigDecimal? = null,
 
-    @Column(name = "volume_ma_30d", nullable = true, precision = 32, scale = 8)
-    val volumeMa30d: BigDecimal? = null
+    @Column(name = "quote_volume_ma_30d", nullable = true, precision = 32, scale = 8)
+    val quoteVolumeMa30d: BigDecimal? = null
 )

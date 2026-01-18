@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS daily_volume_stats (
     quote_volume_sum DECIMAL(32,8) NOT NULL,
     volume_ma_7d DECIMAL(32,8) NULL,
     volume_ma_30d DECIMAL(32,8) NULL,
+    quote_volume_ma_7d DECIMAL(32,8) NULL,
+    quote_volume_ma_30d DECIMAL(32,8) NULL,
     UNIQUE KEY uk_stats_ex_sy_date (exchange, symbol, date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

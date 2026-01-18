@@ -13,6 +13,9 @@ import java.time.LocalDateTime
 interface Candle1mRepository : JpaRepository<Candle1m, Long> {
     fun findByExchangeAndSymbolAndOpenTime(exchange: String, symbol: String, openTime: LocalDateTime): Candle1m?
 
+    @Query("SELECT SUM(c.quoteVolume) FROM Candle1m c WHERE c.exchange = :exchange AND c.symbol = :symbol AND c.openTime >= :start AND c.openTime < :end")
+    fun getQuoteVolumeSum(exchange: String, symbol: String, start: LocalDateTime, end: LocalDateTime): BigDecimal?
+
     @Query("SELECT SUM(c.volume) FROM Candle1m c WHERE c.exchange = :exchange AND c.symbol = :symbol AND c.openTime >= :start AND c.openTime < :end")
     fun getVolumeSum(exchange: String, symbol: String, start: LocalDateTime, end: LocalDateTime): BigDecimal?
 

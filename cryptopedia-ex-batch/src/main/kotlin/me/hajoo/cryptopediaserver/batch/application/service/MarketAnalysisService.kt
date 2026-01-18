@@ -95,8 +95,8 @@ class MarketAnalysisService(
 
         symbols.forEach { symbol ->
             try {
-                // 1. Calculate Volume Sum for targetDate
-                val volumeSum = candle1mRepository.getVolumeSum(
+                // 1. Calculate Quote Volume Sum for targetDate
+                val quoteVolumeSum = candle1mRepository.getQuoteVolumeSum(
                     symbol.exchange, 
                     symbol.symbol, 
                     startOfDay, 
@@ -106,25 +106,26 @@ class MarketAnalysisService(
                 // 2. Save or Update DailyStats
                 val existing = dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate(symbol.exchange, symbol.symbol, targetDate)
                 val savedStats = if (existing != null) {
-                    // Normally shouldn't happen for past dates unless re-running
                     dailyVolumeStatsRepository.save(
                         DailyVolumeStats(
                             id = existing.id,
                             exchange = symbol.exchange,
                             symbol = symbol.symbol,
                             date = targetDate,
-                            volumeSum = volumeSum,
-                            quoteVolumeSum = BigDecimal.ZERO // TODO: Add quote volume support later if needed
+                            volumeSum = existing.volumeSum, // Keep existing volumeSum
+                            quoteVolumeSum = quoteVolumeSum
                         )
                     )
                 } else {
+                    // For new records, we might want to fetch volumeSum too for completeness
+                    val volumeSum = candle1mRepository.getVolumeSum(symbol.exchange, symbol.symbol, startOfDay, endOfDay) ?: BigDecimal.ZERO
                     dailyVolumeStatsRepository.save(
                         DailyVolumeStats(
                             exchange = symbol.exchange,
                             symbol = symbol.symbol,
                             date = targetDate,
                             volumeSum = volumeSum,
-                            quoteVolumeSum = BigDecimal.ZERO
+                            quoteVolumeSum = quoteVolumeSum
                         )
                     )
                 }
@@ -153,14 +154,14 @@ class MarketAnalysisService(
                 // MA 7
                 val last7 = safeHistory.take(7)
                 val ma7 = if (last7.isNotEmpty()) {
-                    last7.map { it.volumeSum }.reduce { acc, v -> acc.add(v) }
+                    last7.map { it.quoteVolumeSum }.reduce { acc, v -> acc.add(v) }
                         .divide(BigDecimal(last7.size), 8, RoundingMode.HALF_UP)
                 } else null
 
                 // MA 30
                 val last30 = safeHistory.take(30)
                 val ma30 = if (last30.isNotEmpty()) {
-                    last30.map { it.volumeSum }.reduce { acc, v -> acc.add(v) }
+                    last30.map { it.quoteVolumeSum }.reduce { acc, v -> acc.add(v) }
                         .divide(BigDecimal(last30.size), 8, RoundingMode.HALF_UP)
                 } else null
 
@@ -173,8 +174,8 @@ class MarketAnalysisService(
                         date = savedStats.date,
                         volumeSum = savedStats.volumeSum,
                         quoteVolumeSum = savedStats.quoteVolumeSum,
-                        volumeMa7d = ma7,
-                        volumeMa30d = ma30
+                        quoteVolumeMa7d = ma7,
+                        quoteVolumeMa30d = ma30
                     )
                 )
 
@@ -213,14 +214,14 @@ class MarketAnalysisService(
                 val stats = dailyVolumeStatsRepository.findByExchangeAndSymbolAndDate(symbol.exchange, symbol.symbol, yesterday)
                 
                 // If no stats (new symbol?), skip or use fallback
-                if (stats == null || stats.volumeMa7d == null || stats.volumeMa30d == null) return@forEach
+                if (stats == null || stats.quoteVolumeMa7d == null || stats.quoteVolumeMa30d == null) return@forEach
 
                 // 2. Calculate Multi-Timeframe RVOL
-                val dailyMa = stats.volumeMa30d!!
+                val dailyMa = stats.quoteVolumeMa30d!!
                 if (dailyMa.compareTo(BigDecimal.ZERO) == 0) return@forEach
 
                 // 2-1. Today's RVOL (existing logic)
-                val currentVol = candle1mRepository.getVolumeSum(
+                val currentVol = candle1mRepository.getQuoteVolumeSum(
                     symbol.exchange, symbol.symbol, startOfDay, now
                 ) ?: BigDecimal.ZERO
                 val elapsedMinutes = Duration.between(startOfDay, now).toMinutes().coerceAtLeast(1)
@@ -233,7 +234,7 @@ class MarketAnalysisService(
                 val candleEnd = now.withSecond(0).withNano(0)
                 val candleStart = candleEnd.minusMinutes(1)
                 
-                val vol1m = candle1mRepository.getVolumeSum(
+                val vol1m = candle1mRepository.getQuoteVolumeSum(
                     symbol.exchange, symbol.symbol, candleStart, candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected1m = dailyMa.multiply(BigDecimal(1)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
@@ -242,7 +243,7 @@ class MarketAnalysisService(
                 } else BigDecimal.ZERO
 
                 // 2-3. 5-minute RVOL
-                val vol5m = candle1mRepository.getVolumeSum(
+                val vol5m = candle1mRepository.getQuoteVolumeSum(
                     symbol.exchange, symbol.symbol, candleEnd.minusMinutes(5), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected5m = dailyMa.multiply(BigDecimal(5)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
@@ -251,7 +252,7 @@ class MarketAnalysisService(
                 } else BigDecimal.ZERO
 
                 // 2-3. 15-minute RVOL
-                val vol15m = candle1mRepository.getVolumeSum(
+                val vol15m = candle1mRepository.getQuoteVolumeSum(
                     symbol.exchange, symbol.symbol, candleEnd.minusMinutes(15), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected15m = dailyMa.multiply(BigDecimal(15)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
@@ -260,7 +261,7 @@ class MarketAnalysisService(
                 } else BigDecimal.ZERO
 
                 // 2-4. 30-minute RVOL
-                val vol30m = candle1mRepository.getVolumeSum(
+                val vol30m = candle1mRepository.getQuoteVolumeSum(
                     symbol.exchange, symbol.symbol, candleEnd.minusMinutes(30), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected30m = dailyMa.multiply(BigDecimal(30)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
@@ -269,7 +270,7 @@ class MarketAnalysisService(
                 } else BigDecimal.ZERO
 
                 // 2-5. 1-hour RVOL
-                val vol1h = candle1mRepository.getVolumeSum(
+                val vol1h = candle1mRepository.getQuoteVolumeSum(
                     symbol.exchange, symbol.symbol, candleEnd.minusHours(1), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected1h = dailyMa.multiply(BigDecimal(60)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
@@ -278,7 +279,7 @@ class MarketAnalysisService(
                 } else BigDecimal.ZERO
 
                 // 2-6. 4-hour RVOL
-                val vol4h = candle1mRepository.getVolumeSum(
+                val vol4h = candle1mRepository.getQuoteVolumeSum(
                     symbol.exchange, symbol.symbol, candleEnd.minusHours(4), candleEnd
                 ) ?: BigDecimal.ZERO
                 val expected4h = dailyMa.multiply(BigDecimal(240)).divide(BigDecimal(1440), 8, RoundingMode.HALF_UP)
@@ -524,10 +525,10 @@ class MarketAnalysisService(
                     val volume = kline.volume
                     val quoteVolume = kline.quoteAssetVolume
                     
-                    val maWindow7 = statsList.takeLast(6).map { it.volumeSum } + volume
+                    val maWindow7 = statsList.takeLast(6).map { it.quoteVolumeSum } + quoteVolume
                     val ma7 = maWindow7.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(maWindow7.size), 8, RoundingMode.HALF_UP)
 
-                    val maWindow30 = statsList.takeLast(29).map { it.volumeSum } + volume
+                    val maWindow30 = statsList.takeLast(29).map { it.quoteVolumeSum } + quoteVolume
                     val ma30 = maWindow30.reduce { acc, v -> acc.add(v) }.divide(BigDecimal(maWindow30.size), 8, RoundingMode.HALF_UP)
 
                     val stats = DailyVolumeStats(
@@ -536,8 +537,8 @@ class MarketAnalysisService(
                         date = date,
                         volumeSum = volume,
                         quoteVolumeSum = quoteVolume,
-                        volumeMa7d = ma7,
-                        volumeMa30d = ma30
+                        quoteVolumeMa7d = ma7,
+                        quoteVolumeMa30d = ma30
                     )
                     statsList.add(stats)
                     
