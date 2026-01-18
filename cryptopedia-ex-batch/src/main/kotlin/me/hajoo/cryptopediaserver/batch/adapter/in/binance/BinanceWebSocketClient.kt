@@ -2,11 +2,12 @@ package me.hajoo.cryptopediaserver.batch.adapter.`in`.binance
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import jakarta.annotation.PostConstruct
+import jakarta.annotation.PreDestroy
 import me.hajoo.cryptopediaserver.batch.application.service.MarketDataIngestionService
 import okhttp3.*
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import jakarta.annotation.PreDestroy
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -24,13 +25,29 @@ class BinanceWebSocketClient(
         .build()
     
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-    @Volatile
-    private var webSocket: WebSocket? = null
-    private val baseUrl = "wss://fstream.binance.com/stream"
-    @Volatile
-    private var isConnected = false
-    private var isShuttingDown = false
+    private val tickerBuffer = ConcurrentHashMap<String, MarketDataIngestionService.TickerData>()
     
+    @PostConstruct
+    fun init() {
+        scheduler.scheduleAtFixedRate({
+            flushTickerBuffer()
+        }, 1, 1, TimeUnit.SECONDS)
+    }
+
+    private fun flushTickerBuffer() {
+        if (tickerBuffer.isEmpty()) return
+
+        val tickersToProcess = tickerBuffer.values.toList()
+        tickerBuffer.clear()
+
+        try {
+            marketDataIngestionService.processTickers(tickersToProcess)
+            logger.debug("Flushed ${tickersToProcess.size} tickers to DB")
+        } catch (e: Exception) {
+            logger.error("Failed to flush ticker buffer", e)
+        }
+    }
+
     private val pendingSymbols = ConcurrentHashMap.newKeySet<String>()
     private val subscribedSymbols = ConcurrentHashMap.newKeySet<String>()
 
@@ -161,29 +178,37 @@ class BinanceWebSocketClient(
         val symbol = node.get("s").asText()
         val kline = node.get("k")
 
-        
         marketDataIngestionService.processKline(
-             symbol = symbol,
-             openTime = kline.get("t").asLong(),
-             open = kline.get("o").asText().toBigDecimal(),
-             high = kline.get("h").asText().toBigDecimal(),
-             low = kline.get("l").asText().toBigDecimal(),
-             close = kline.get("c").asText().toBigDecimal(),
-             volume = kline.get("v").asText().toBigDecimal(),
-             quoteVolume = kline.get("q").asText().toBigDecimal(),
-             trades = kline.get("n").asLong()
+            symbol = symbol,
+            openTime = kline.get("t").asLong(),
+            open = kline.get("o").asText().toBigDecimal(),
+            high = kline.get("h").asText().toBigDecimal(),
+            low = kline.get("l").asText().toBigDecimal(),
+            close = kline.get("c").asText().toBigDecimal(),
+            volume = kline.get("v").asText().toBigDecimal(),
+            quoteVolume = kline.get("q").asText().toBigDecimal(),
+            trades = kline.get("n").asLong()
         )
     }
 
     private fun handleTicker(node: JsonNode) {
-        marketDataIngestionService.processTicker(
-            symbol = node.get("s").asText(),
+        val symbol = node.get("s").asText()
+        val tickerData = MarketDataIngestionService.TickerData(
+            symbol = symbol,
             lastPrice = node.get("c").asText().toBigDecimal(),
             priceChangePercent = node.get("P").asText().toBigDecimal(),
             volume24h = node.get("v").asText().toBigDecimal(),
             quoteVolume24h = node.get("q").asText().toBigDecimal()
         )
+        tickerBuffer[symbol] = tickerData
     }
+
+    @Volatile
+    private var webSocket: WebSocket? = null
+    private val baseUrl = "wss://fstream.binance.com/stream"
+    @Volatile
+    private var isConnected = false
+    private var isShuttingDown = false
 
     @PreDestroy
     fun shutdown() {

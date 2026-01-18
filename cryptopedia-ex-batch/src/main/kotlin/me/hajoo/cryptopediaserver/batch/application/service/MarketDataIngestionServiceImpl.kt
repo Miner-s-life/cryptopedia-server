@@ -4,6 +4,7 @@ import me.hajoo.cryptopediaserver.core.domain.Candle1m
 import me.hajoo.cryptopediaserver.core.domain.Candle1mRepository
 import me.hajoo.cryptopediaserver.core.domain.Ticker24hLatest
 import me.hajoo.cryptopediaserver.core.domain.Ticker24hLatestRepository
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -15,7 +16,8 @@ import java.time.ZoneId
 @Transactional
 class MarketDataIngestionServiceImpl(
     private val candle1mRepository: Candle1mRepository,
-    private val ticker24hLatestRepository: Ticker24hLatestRepository
+    private val ticker24hLatestRepository: Ticker24hLatestRepository,
+    private val jdbcTemplate: JdbcTemplate
 ) : MarketDataIngestionService {
 
     override fun processKline(
@@ -46,7 +48,35 @@ class MarketDataIngestionServiceImpl(
         )
     }
 
-    override fun processTicker(
+    override fun processTickers(tickers: List<MarketDataIngestionService.TickerData>) {
+        if (tickers.isEmpty()) return
+        
+        val exchange = "BINANCE"
+        val sql = """
+            INSERT INTO ticker_24h_latest (exchange, symbol, last_price, price_change_percent, volume24h, quote_volume24h, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                last_price = VALUES(last_price),
+                price_change_percent = VALUES(price_change_percent),
+                volume24h = VALUES(volume24h),
+                quote_volume24h = VALUES(quote_volume24h),
+                last_updated = VALUES(last_updated)
+        """.trimIndent()
+
+        val now = LocalDateTime.now()
+        jdbcTemplate.batchUpdate(sql, tickers, tickers.size) { ps, ticker ->
+            ps.setString(1, exchange)
+            ps.setString(2, ticker.symbol)
+            ps.setBigDecimal(3, ticker.lastPrice)
+            ps.setBigDecimal(4, ticker.priceChangePercent)
+            ps.setBigDecimal(5, ticker.volume24h)
+            ps.setBigDecimal(6, ticker.quoteVolume24h)
+            ps.setTimestamp(7, java.sql.Timestamp.valueOf(now))
+        }
+    }
+
+    @Deprecated("Use processTickers for better performance")
+    fun processTicker(
         symbol: String,
         lastPrice: BigDecimal,
         priceChangePercent: BigDecimal,

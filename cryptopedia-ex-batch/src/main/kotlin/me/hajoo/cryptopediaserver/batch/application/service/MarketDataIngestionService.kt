@@ -15,11 +15,13 @@ interface MarketDataIngestionService {
         trades: Long
     )
 
-    fun processTicker(
-        symbol: String,
-        lastPrice: BigDecimal,
-        priceChangePercent: BigDecimal,
-        volume24h: BigDecimal,
-        quoteVolume24h: BigDecimal
+    fun processTickers(tickers: List<TickerData>)
+
+    data class TickerData(
+        val symbol: String,
+        val lastPrice: BigDecimal,
+        val priceChangePercent: BigDecimal,
+        val volume24h: BigDecimal,
+        val quoteVolume24h: BigDecimal
     )
 }
