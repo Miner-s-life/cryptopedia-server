@@ -32,7 +32,7 @@ class BinanceWebSocketClient(
     fun init() {
         scheduler.scheduleAtFixedRate({
             flushBuffers()
-        }, 1, 1, TimeUnit.SECONDS)
+        }, 100, 100, TimeUnit.MILLISECONDS)
     }
 
     private fun flushBuffers() {
