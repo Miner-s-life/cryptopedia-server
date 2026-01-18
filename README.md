@@ -1,8 +1,17 @@
-# Cryptopedia
+# Cryptopedia (크립토피디아)
 
-Cryptopedia는 암호화폐 시장의 방대한 데이터를 분석하여 투자자에게 유의미한 인사이트와 실시간 시장 흐름을 제공하는 지능형 데이터 플랫폼입니다.
+**Cryptopedia**는 암호화폐 시장의 방대한 데이터를 실시간으로 분석하여 투자자에게 유의미한 인사이트와 시장의 이상 흐름을 즉각적으로 제공하는 **지능형 데이터 분석 플랫폼**입니다.
 
-## Architecture
+## 🌟 Service Summary
+
+- **실시간 거래량 급등(RVOL) 탐지**: 과거 데이터 기반의 예측 모델을 통해 현재 거래량이 비정상적으로 터지는 종목을 초 단위로 감지합니다.
+- **다중 타임프레임 분석**: 1분봉부터 4시간봉까지 다양한 관점에서 시장의 에너지를 분석하여 단타부터 스윙까지 최적의 진입 시점을 제안합니다.
+- **시장 이상 징후 알림**: 급격한 가격 변동이나 거래량 폭발 시 슬랙(Slack) 등 협업 도구로 실시간 푸시 알림을 발송합니다.
+- **데이터 기반의 의사결정**: 단순 가격 차트를 넘어, 수치화된 상대 거래량 지표를 통해 감정이 배제된 객관적인 투자 판단을 돕습니다.
+
+## 🏗️ Total Infrastructure Architecture
+
+시스템의 안정성과 확장성을 위해 구축된 전체 인프라 및 데이터 흐름도입니다. 로그 수집 및 메트릭 모니터링 체계를 포함합니다.
 
 ```mermaid
 graph TD
@@ -11,156 +20,64 @@ graph TD
         UP[Upbit KRW]
     end
 
-    subgraph "Cryptopedia System"
+    subgraph "Kubernetes Cluster (Infrastructure)"
         direction TB
-        BATCH["cryptopedia-ex-batch<br/>(Ingestion & Analysis)"]
-        API["cryptopedia-ex-api<br/>(Data Service)"]
-        DB[(MySQL)]
-        REDIS[(Redis)]
-    end
+        subgraph "Application Layer"
+            BATCH["cryptopedia-ex-batch<br/>(Ingestion & Analysis)"]
+            API["cryptopedia-ex-api<br/>(Data Service)"]
+        end
 
-    subgraph "Observability & Infrastructure"
-        direction LR
-        PROMTAIL[Promtail]
-        LOKI[Loki]
-        PROM[Prometheus]
-        GRAFANA[Grafana]
-    end
+        subgraph "Data Layer"
+            DB[(MySQL 8.0)]
+            REDIS[(Redis Cache)]
+        end
 
-    BN -- "WebSocket/REST" --> BATCH
-    UP -- "WebSocket/REST" --> BATCH
-    
-    BATCH -- "Save Candles/Tickers" --> DB
-    BATCH -- "Cache Metrics (RVOL)" --> REDIS
-    
-    API -- "Query Data" --> DB
-    API -- "Get Metrics" --> REDIS
-    
-    UI[Frontend UI] -- "REST API" --> API
-
-    %% Observability Flow
-    BATCH -- "Logs" --> PROMTAIL
-    API -- "Logs" --> PROMTAIL
-    PROMTAIL -- "Push" --> LOKI
-    
-    BATCH -- "Metrics" --> PROM
-    API -- "Metrics" --> PROM
-    
-    LOKI -- "Query" --> GRAFANA
-    PROM -- "Query" --> GRAFANA
-```
-
-## Tech Stack
-
-- **Language**: Kotlin 2.0
-- **Framework**: Spring Boot 3.4
-- **Persistence**: MySQL 8.0, Spring Data JPA
-- **Caching**: Redis
-- **Networking**: Spring Cloud OpenFeign, OkHttp (WebSocket)
-- **Documentation**: Springdoc OpenAPI (Swagger)
-- **Build**: Gradle
-
-## 🏗️ Symbol Lifecycle Management
-
-시장 상황(상장 폐지, 거래량 변화)에 따라 수집 대상을 동적으로 관리하여 데이터 무결성을 유지합니다.
-
-### Symbol Status
-| 상태 | 설명 | 데이터 수집 |
-| :--- | :--- | :--- |
-| **TRADING** | 거래량 상위 100위 이내의 활성 심볼 | **진행 (WS/API)** |
-| **BREAK** | 거래소에 존재하나 100위권 밖으로 밀려난 상태 | 중단 (데이터 보존) |
-| **DELISTED** | 거래소에서 제거되었거나 상장 폐지된 상태 | 영구 제외 |
-
-### Sync Workflow
-```mermaid
-stateDiagram-v2
-    [*] --> ExchangeInfo: Every 1 Hour
-    ExchangeInfo --> DELISTED: Not in ExchangeInfo<br/>or Status != TRADING
-    ExchangeInfo --> Ranking: Valid Symbols
-    
-    Ranking --> TRADING: In Top 100 Volume
-    Ranking --> BREAK: Out of Top 100 Volume
-    
-    TRADING --> BREAK: Volume dropped
-    BREAK --> TRADING: Volume surged
-    TRADING --> DELISTED: Delisted from Exchange
-```
-
-## 📈 Multi-Timeframe RVOL System
-
-RVOL(Relative Volume)은 과거 평균 거래량 대비 현재 거래량의 비율로, **단타 트레이딩에 최적화된 다중 타임프레임 시스템**을 제공합니다.
-
-### Timeframe Structure
-
-| 타임프레임 | 용도 | 트레이딩 스타일 | 임계값 예시 |
-|:---|:---|:---|:---|
-| **1분** | 초고속 급등 감지 | 세력 매집 포착 | > 8.0 |
-| **5분** | 초단타 진입 시그널 | 스캘핑 (1~5분) | > 5.0 |
-| **15분** | 단타 확인 | 단타 (10~30분) | > 3.0 |
-| **30분** | 단기 추세 확인 | 데이 트레이딩 (30분~2시간) | > 2.5 |
-| **1시간** | 중기 추세 | 스윙 (2~6시간) | > 2.0 |
-| **4시간** | 일중 큰 흐름 | 당일 청산 | > 1.8 |
-| **Today** | 오늘 전체 | 참고용 | > 1.5 |
-
-### Calculation Logic
-
-각 타임프레임별로 독립적으로 계산됩니다:
-
-1.  **실제 거래량**: 해당 타임프레임 동안의 누적 거래량
-2.  **예상 거래량**: 과거 30일 동일 시간대 평균 거래량
-3.  **RVOL**: `실제 거래량 / 예상 거래량`
-
-```
-RVOL_5m = Volume(최근 5분) / AvgVolume(과거 30일 동일 5분)
-RVOL_15m = Volume(최근 15분) / AvgVolume(과거 30일 동일 15분)
-...
-```
-
-### Trading Scenarios
-
-#### 초단타 진입 (1~5분)
-```kotlin
-if (rvol_1m > 8.0 && rvol_5m > 5.0) {
-    // 지금 막 터지는 중! 즉시 진입
-}
-```
-
-#### 단타 확인 (10~30분)
-```kotlin
-if (rvol_1m > 6.0 && rvol_5m > 4.0 && rvol_15m > 3.0) {
-    // 다중 타임프레임 확인, 강력한 진입
-}
-```
-
-#### 청산 시그널
-```kotlin
-if (rvol_1m < 1.0 && rvol_5m < 1.0 && profit > 2.0%) {
-    // 거래량 소멸, 익절 청산
-}
-```
-
-### Data Flow Sequence
-
-```mermaid
-sequenceDiagram
-    participant DB as MySQL (Candles)
-    participant Batch as MarketAnalysisService
-    participant Redis as Redis Cache
-    participant Alert as AlertService
-
-    loop Every Minute
-        Batch->>DB: Fetch last 5m/15m/30m/1h/4h candles
-        Batch->>DB: Fetch historical avg volumes
-        
-        Note over Batch: Calculate RVOL for each timeframe
-        
-        Batch->>DB: Save SymbolMetrics (6 RVOL values)
-        Batch->>Redis: Cache Metrics
-        
-        opt Multi-timeframe surge detected
-            Batch->>Alert: Trigger Alert (5m + 15m surge)
-            Alert-->>User: Slack/Telegram Notification
+        subgraph "Observability Layer"
+            PROMTAIL[Promtail]
+            LOKI[Loki]
+            PROM[Prometheus]
+            GRAFANA[Grafana]
         end
     end
+
+    %% Data Flow
+    BN -- "WebSocket/REST" --> BATCH
+    UP -- "WebSocket/REST" --> BATCH
+    BATCH -- "Batch Upsert" --> DB
+    BATCH -- "Metrics" --> REDIS
+    API -- "Query" --> DB
+    API -- "Get" --> REDIS
+
+    %% Log & Metric Flow
+    BATCH -- "Log Stream" --> PROMTAIL
+    API -- "Log Stream" --> PROMTAIL
+    PROMTAIL -- "Push logs" --> LOKI
+    BATCH -- "Scrape metrics" --> PROM
+    API -- "Scrape metrics" --> PROM
+    
+    LOKI -- "Visualize" --> GRAFANA
+    PROM -- "Visualize" --> GRAFANA
+    
+    %% Notification
+    BATCH -- "Alert" --> SLACK[Slack Alert]
 ```
+
+## 📖 Detailed Documentation
+
+서비스의 내부 동작 원리 및 기술적 상세 구현 내용은 아래 문서를 참고하세요.
+
+- [**System Architecture**](./docs/system-architecture.md): 상세 모듈 구조 및 심볼 생명주기 관리
+- [**Data Ingestion Pipeline**](./docs/data-ingestion-pipeline.md): 웹소켓 버퍼링, 배치 업서트 및 자동 복구(Backfill) 기술 상세
+- [**RVOL Calculation Logic**](./docs/rvol-calculation.md): 거래량 급등 탐지 알고리즘 및 다중 타임프레임 정의
+
+---
+
+## 🛠 Tech Stack
+
+- **Backend**: Kotlin 2.0, Spring Boot 3.4
+- **Database**: MySQL 8.0 (Persistence), Redis (Caching)
+- **Infra**: Kubernetes, Helm, Docker
+- **Monitoring**: Prometheus, Grafana, Loki, Promtail
+- **Communication**: Slack API (Alerting)
+
 
