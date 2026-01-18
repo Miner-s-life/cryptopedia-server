@@ -26,12 +26,18 @@ class BinanceWebSocketClient(
     
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private val tickerBuffer = ConcurrentHashMap<String, MarketDataIngestionService.TickerData>()
+    private val klineBuffer = ConcurrentHashMap<String, MarketDataIngestionService.KlineData>()
     
     @PostConstruct
     fun init() {
         scheduler.scheduleAtFixedRate({
-            flushTickerBuffer()
+            flushBuffers()
         }, 1, 1, TimeUnit.SECONDS)
+    }
+
+    private fun flushBuffers() {
+        flushTickerBuffer()
+        flushKlineBuffer()
     }
 
     private fun flushTickerBuffer() {
@@ -45,6 +51,20 @@ class BinanceWebSocketClient(
             logger.debug("Flushed ${tickersToProcess.size} tickers to DB")
         } catch (e: Exception) {
             logger.error("Failed to flush ticker buffer", e)
+        }
+    }
+
+    private fun flushKlineBuffer() {
+        if (klineBuffer.isEmpty()) return
+
+        val klinesToProcess = klineBuffer.values.toList()
+        klineBuffer.clear()
+
+        try {
+            marketDataIngestionService.processKlines(klinesToProcess)
+            logger.debug("Flushed ${klinesToProcess.size} klines to DB")
+        } catch (e: Exception) {
+            logger.error("Failed to flush kline buffer", e)
         }
     }
 
@@ -177,8 +197,8 @@ class BinanceWebSocketClient(
     private fun handleKline(node: JsonNode) {
         val symbol = node.get("s").asText()
         val kline = node.get("k")
-
-        marketDataIngestionService.processKline(
+        
+        val klineData = MarketDataIngestionService.KlineData(
             symbol = symbol,
             openTime = kline.get("t").asLong(),
             open = kline.get("o").asText().toBigDecimal(),
@@ -189,6 +209,9 @@ class BinanceWebSocketClient(
             quoteVolume = kline.get("q").asText().toBigDecimal(),
             trades = kline.get("n").asLong()
         )
+        // 같은 심볼+시간대의 캔들은 최신 데이터로 덮어쓰기
+        val key = "$symbol:${klineData.openTime}"
+        klineBuffer[key] = klineData
     }
 
     private fun handleTicker(node: JsonNode) {

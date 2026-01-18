@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.sql.Timestamp
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -20,6 +21,39 @@ class MarketDataIngestionServiceImpl(
     private val jdbcTemplate: JdbcTemplate
 ) : MarketDataIngestionService {
 
+    override fun processKlines(klines: List<MarketDataIngestionService.KlineData>) {
+        if (klines.isEmpty()) return
+
+        val exchange = "BINANCE"
+        val sql = """
+            INSERT INTO candles_1m (exchange, symbol, open_time, open_price, high_price, low_price, close_price, volume, quote_volume, trades)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                open_price = VALUES(open_price),
+                high_price = VALUES(high_price),
+                low_price = VALUES(low_price),
+                close_price = VALUES(close_price),
+                volume = VALUES(volume),
+                quote_volume = VALUES(quote_volume),
+                trades = VALUES(trades)
+        """.trimIndent()
+
+        jdbcTemplate.batchUpdate(sql, klines, klines.size) { ps, kline ->
+            val openTimeLdt = LocalDateTime.ofInstant(Instant.ofEpochMilli(kline.openTime), ZoneId.of("UTC"))
+            ps.setString(1, exchange)
+            ps.setString(2, kline.symbol)
+            ps.setTimestamp(3, Timestamp.valueOf(openTimeLdt))
+            ps.setBigDecimal(4, kline.open)
+            ps.setBigDecimal(5, kline.high)
+            ps.setBigDecimal(6, kline.low)
+            ps.setBigDecimal(7, kline.close)
+            ps.setBigDecimal(8, kline.volume)
+            ps.setBigDecimal(9, kline.quoteVolume)
+            ps.setLong(10, kline.trades)
+        }
+    }
+
+    @Deprecated("Use processKlines for better performance")
     override fun processKline(
         symbol: String,
         openTime: Long,
@@ -71,7 +105,7 @@ class MarketDataIngestionServiceImpl(
             ps.setBigDecimal(4, ticker.priceChangePercent)
             ps.setBigDecimal(5, ticker.volume24h)
             ps.setBigDecimal(6, ticker.quoteVolume24h)
-            ps.setTimestamp(7, java.sql.Timestamp.valueOf(now))
+            ps.setTimestamp(7, Timestamp.valueOf(now))
         }
     }
 

@@ -17,6 +17,20 @@ interface MarketDataIngestionService {
 
     fun processTickers(tickers: List<TickerData>)
 
+    fun processKlines(klines: List<KlineData>)
+
+    data class KlineData(
+        val symbol: String,
+        val openTime: Long,
+        val open: BigDecimal,
+        val high: BigDecimal,
+        val low: BigDecimal,
+        val close: BigDecimal,
+        val volume: BigDecimal,
+        val quoteVolume: BigDecimal,
+        val trades: Long
+    )
+
     data class TickerData(
         val symbol: String,
         val lastPrice: BigDecimal,
